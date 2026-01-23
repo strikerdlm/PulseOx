@@ -1,0 +1,11 @@
+name: pulseox
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip=24.0
+  - pip:
+      - bleak==0.22.2
+      - pytest==8.2.0
+      - ruff==0.6.9
+      - pyright==1.1.390
