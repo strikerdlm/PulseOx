@@ -1,4 +1,4 @@
-# PulseOx — BLE reader for pulse oximeters (tested with LPOW A340B)
+# PulseOx — BLE reader for pulse oximeters (tested with LPOW A340B-LK)
 
 Minimal Python CLI that scans BLE devices, prints GATT services/characteristics, subscribes to notify/indicate characteristics, and prints raw + best-effort decoded SpO2/pulse frames.
 
@@ -39,12 +39,12 @@ If you do not pass `--address`, the CLI will prompt for a device index.
 
 ### 2) Connect directly if you already know the address
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF"
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21"
 ```
 
 ### 3) Print GATT (services/characteristics)
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --print-gatt
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --print-gatt
 ```
 Note: `--print-gatt` exits unless you also set `--auto-notify` or `--notify-uuid`.
 
@@ -52,16 +52,25 @@ Note: `--print-gatt` exits unless you also set `--auto-notify` or `--notify-uuid
 
 Option A (recommended for discovery): subscribe to all notify/indicate characteristics and print the GATT listing
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --auto-notify --print-gatt --duration 30
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --auto-notify --print-gatt --duration 30
 ```
 
 Option B: subscribe to a specific characteristic UUID
 
-The default UART-like TX UUID in this repo is:
+Default for the tested LPOW A340B-LK:
+- Service: `0000fff0-0000-1000-8000-00805f9b34fb`
+- Notify characteristic: `0000fff6-0000-1000-8000-00805f9b34fb`
+
+```bash
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --notify-uuid 0000fff6-0000-1000-8000-00805f9b34fb --duration 30
+```
+
+Other devices:
+Some consumer oximeters expose UART-like characteristics. One observed TX UUID is:
 `49535343-1e4d-4bd9-ba61-23c647249616`
 
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --notify-uuid 49535343-1e4d-4bd9-ba61-23c647249616 --duration 30
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --notify-uuid 49535343-1e4d-4bd9-ba61-23c647249616 --duration 30
 ```
 
 ### 5) Tuning runtime bounds/timeouts
@@ -75,7 +84,7 @@ Use `--csv` to write **timestamped** decoded samples to a CSV file for analysis.
 
 Recommended (stable, low-overhead) collection command:
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --csv session.csv --duration 300 --quiet
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv --duration 300 --quiet
 ```
 
 Notes:
@@ -92,9 +101,9 @@ CSV columns:
 - `sender`: BLE sender/handle/UUID (best-effort)
 - `spo2_percent`, `pulse_bpm`, `perfusion_index`
 - `plausible`: `1` if basic plausibility checks passed, else `0`
-- `raw_frame_hex`: dash-separated hex of the selected 5-byte frame
+- `raw_frame_hex`: dash-separated hex of the selected measurement frame (device-dependent; A340B-LK uses `f1 ...`)
 - `raw_notification_hex`: dash-separated hex of the full notification payload
-- `remainder_hex`: dash-separated hex of leftover bytes when payload length is not a multiple of 5
+- `remainder_hex`: dash-separated hex of leftover bytes when payload length is not a multiple of the frame length (generic 5-byte mode)
 
 ### Examples (copy/paste)
 
@@ -105,28 +114,47 @@ python -m pulseox.cli --scan --csv session.csv --csv-overwrite --duration 300 --
 
 Example 2 — record 10 minutes from a known address (default 1 Hz sampling):
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --csv session.csv --csv-overwrite --duration 600 --quiet
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv --csv-overwrite --duration 600 --quiet
 ```
 
 Example 3 — long run with lower write rate (0.5 Hz) to reduce overhead:
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --csv long_run.csv --csv-overwrite --sample-hz 0.5 --duration 3600 --quiet
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv long_run.csv --csv-overwrite --sample-hz 0.5 --duration 3600 --quiet
 ```
 
 Example 4 — append multiple sessions into the same CSV file:
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --csv study.csv --csv-append --duration 300 --quiet
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv study.csv --csv-append --duration 300 --quiet
 ```
 
 Example 5 — debug capture (no rate limit + include implausible frames):
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --csv debug.csv --csv-overwrite --sample-hz 0 --include-implausible --duration 60
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv debug.csv --csv-overwrite --sample-hz 0 --include-implausible --duration 60
 ```
 
 Example 6 — discovery mode: subscribe to all notify/indicate characteristics, print GATT, and still record:
 ```bash
-python -m pulseox.cli --address "AA:BB:CC:DD:EE:FF" --auto-notify --print-gatt --csv discover.csv --csv-overwrite --duration 30 --quiet
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --auto-notify --print-gatt --csv discover.csv --csv-overwrite --duration 30 --quiet
 ```
+
+### 7) Re-decode / clean an existing CSV (A340B-LK)
+Older CSVs recorded with a generic 5-byte frame decoder can contain obviously wrong values (e.g. HR stuck at 128, SpO2 at 0/100), because A340B-LK sends its measurements in `0xF1` packets.
+
+Use the included re-decoder/cleaner to produce a new CSV with corrected values and cleaning flags:
+```bash
+python -m pulseox.clean_csv session.csv --out session_clean.csv
+```
+
+This writes `session_clean.csv` with extra columns:
+- `packet_type_hex`: first byte of the notification payload (`f1`, `f0`, `f2`, ...)
+- `spo2_redecoded`, `pulse_redecoded`: re-decoded values for `f1` packets
+- `keep`: `1` if the sample passed filters, else `0`
+- `spo2_clean`, `pulse_clean`: forward-filled cleaned series (bounded)
+- `drop_reason`: why a sample was rejected
+
+Tuning (examples):
+- tighter spike rejection: `--max-dpulse 10 --max-dspo2 3`
+- tighter baseline window: `--max-pulse-dev 15 --max-spo2-dev 4`
 
 ## Output format
 For each BLE notification the CLI prints something like:
@@ -138,7 +166,15 @@ For each BLE notification the CLI prints something like:
 `[OK]` means the decoded values passed basic plausibility checks (SpO2 0–100, pulse 20–250, PI 0–15). `[?]` means it did not.
 
 ## Decoder notes
-`pulseox.decode` currently assumes the payload is a sequence of fixed 5-byte frames and applies heuristics observed in multiple consumer oximeters. Many devices embed headers/footers or use a different framing scheme; in that case you may see `remainder=` and/or implausible frames.
+
+### A340B-LK
+The tested LPOW A340B-LK emits measurement notifications as `0xF1` packets:
+- `f1 <spo2_percent> <pulse_bpm> ...`
+
+Other packet types (commonly `0xF0` and `0xF2`) may be waveform-like data and/or device metadata and should **not** be interpreted as SpO2/HR.
+
+### Generic mode (other devices)
+For other devices, `pulseox.decode` can fall back to a generic 5-byte heuristic (common across some consumer oximeters). Many devices embed headers/footers or use a different framing scheme; in that case you may see `remainder=` and/or implausible frames.
 
 If you want to support another model:
 1. Run `--auto-notify --print-gatt`
@@ -150,6 +186,8 @@ If you want to support another model:
 - If you see no data:
   - try `--auto-notify` (some models notify on a different UUID)
   - increase `--timeout` (Windows/WinRT can be slow at service discovery)
+- `--auto-notify` skips `00002a05-0000-1000-8000-00805f9b34fb` (GATT Service Changed, `indicate`),
+  because on Windows it often fails with `PermissionError(13, 'Access is denied', ...)` and it is not oximeter data.
 - Notifications are bounded by `--duration` and `--max-notifications` to keep execution finite.
 
 ## Open-source publishing & legal notes (read before making public)
