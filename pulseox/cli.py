@@ -13,10 +13,22 @@ from pulseox.ble import (
     scan_devices,
     stream_notifications,
 )
-from pulseox.decode import decode_payload, hexlify
+from pulseox.decode import decode_notification, hexlify
 from pulseox.record import PulseOxCsvRecorder, open_csv_path
 
-UART_TX_UUID = "49535343-1E4D-4BD9-BA61-23C647249616"
+# Default notify characteristic UUID for the tested oximeter.
+#
+# Observed GATT for the device used during development:
+# - Service 0000fff0-0000-1000-8000-00805f9b34fb
+# - Char   0000fff6-0000-1000-8000-00805f9b34fb  (notify)
+# - Char   0000fff7-0000-1000-8000-00805f9b34fb  (write-without-response)
+#
+# Some other consumer oximeters expose UART-like characteristics; keep the UUID
+# as a documented option but do not use it as the default.
+LPOW_A340B_LK_NOTIFY_UUID = "0000fff6-0000-1000-8000-00805f9b34fb"
+ISSC_UART_LIKE_TX_UUID = "49535343-1e4d-4bd9-ba61-23c647249616"
+
+DEFAULT_NOTIFY_UUID = LPOW_A340B_LK_NOTIFY_UUID
 
 
 def _print_devices(devices: Sequence[DeviceInfo], *, sort_rssi: bool) -> list[DeviceInfo]:
@@ -96,7 +108,7 @@ def _make_notify_handler(
         ts = _format_timestamp()
         sender_str = _format_sender(sender)
         print(f"\n[{ts}] from={sender_str} len={len(data)} data={hexlify(data)}")
-        decoded, remainder = decode_payload(data)
+        decoded, remainder = decode_notification(data)
         for frame in decoded:
             tag = "OK" if frame.plausible else "?"
             print(
@@ -149,7 +161,7 @@ async def _maybe_print_gatt_only(args: argparse.Namespace, *, address: str) -> b
 def _compute_notify_uuids(args: argparse.Namespace) -> list[str]:
     if args.auto_notify:
         return []
-    return list(args.notify_uuid or [UART_TX_UUID])
+    return list(args.notify_uuid or [DEFAULT_NOTIFY_UUID])
 
 
 def _open_csv_recorder(args: argparse.Namespace) -> tuple[PulseOxCsvRecorder | None, TextIO | None]:
@@ -224,7 +236,11 @@ def _parse_args() -> argparse.Namespace:
         "--notify-uuid",
         action="append",
         default=[],
-        help=f"Characteristic UUID to notify on (default {UART_TX_UUID})",
+        help=(
+            "Characteristic UUID to notify on "
+            f"(default {DEFAULT_NOTIFY_UUID}; "
+            f"UART-like TX example {ISSC_UART_LIKE_TX_UUID})"
+        ),
     )
     parser.add_argument(
         "--auto-notify",
