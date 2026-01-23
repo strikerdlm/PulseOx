@@ -137,6 +137,96 @@ Example 6 — discovery mode: subscribe to all notify/indicate characteristics, 
 python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --auto-notify --print-gatt --csv discover.csv --csv-overwrite --duration 30 --quiet
 ```
 
+Example 7 — record validated samples (~every 5 seconds) for 60 seconds (0.2 Hz), flushing each row (PowerShell):
+```powershell
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" `
+  --csv validated_60s.csv --csv-overwrite `
+  --duration 60 --sample-hz 0.2 --csv-flush-every 1 `
+  --quiet --timeout 15
+```
+
+Example 8 — programmatic recording (Python): save as `record_validated_60s.py`, then run `python record_validated_60s.py`:
+```python
+from __future__ import annotations
+
+import asyncio
+from typing import Final
+
+from pulseox.ble import stream_notifications
+from pulseox.record import PulseOxCsvRecorder, open_csv_path
+
+A340B_LK_NOTIFY_UUID: Final[str] = "0000fff6-0000-1000-8000-00805f9b34fb"
+
+
+def _require_positive(value: float, name: str) -> float:
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+async def record_validated(
+    *,
+    address: str,
+    out_csv: str,
+    duration_s: float = 60.0,
+    interval_s: float = 5.0,
+    timeout_s: float = 15.0,
+) -> None:
+    if not address:
+        raise ValueError("address must be non-empty")
+    if not out_csv:
+        raise ValueError("out_csv must be non-empty")
+
+    _require_positive(duration_s, "duration_s")
+    _require_positive(interval_s, "interval_s")
+    _require_positive(timeout_s, "timeout_s")
+
+    sample_hz = 1.0 / interval_s
+
+    opened = open_csv_path(out_csv, append=False, overwrite=True)
+    recorder = PulseOxCsvRecorder(
+        opened.file,
+        write_header=opened.write_header,
+        sample_hz=sample_hz,  # 0.2 Hz => ~every 5 seconds
+        include_implausible=False,  # only plausible/validated
+        flush_every=1,  # flush each row
+    )
+
+    def on_payload(sender: object, data: bytes) -> None:
+        recorder.on_notification(sender=sender, data=data)
+
+    try:
+        await stream_notifications(
+            address=address,
+            notify_uuids=[A340B_LK_NOTIFY_UUID],
+            auto_notify=False,
+            run_seconds=duration_s,
+            max_notifications=100_000,  # bounded
+            poll_interval=0.2,
+            timeout_s=timeout_s,
+            on_payload=on_payload,
+        )
+    finally:
+        recorder.close()
+        opened.file.close()
+
+
+def main() -> None:
+    asyncio.run(
+        record_validated(
+            address="FF:FF:FF:FF:00:21",
+            out_csv="validated_60s.csv",
+            duration_s=60.0,
+            interval_s=5.0,
+            timeout_s=15.0,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
+```
+
 ### 7) Re-decode / clean an existing CSV (A340B-LK)
 Older CSVs recorded with a generic 5-byte frame decoder can contain obviously wrong values (e.g. HR stuck at 128, SpO2 at 0/100), because A340B-LK sends its measurements in `0xF1` packets.
 
