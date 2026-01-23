@@ -46,6 +46,10 @@ class NotifyResult:
 
 OnPayload = Callable[[object, bytes], None]
 
+# Standard GATT characteristic that is not used for oximeter data, and on some
+# Windows/WinRT setups may reject subscriptions with Access Denied.
+GATT_SERVICE_CHANGED_UUID = "00002a05-0000-1000-8000-00805f9b34fb"
+
 
 def _require_positive(value: float, name: str) -> float:
     if value <= 0:
@@ -140,6 +144,8 @@ async def _connect_client(address: str, timeout_s: float, connect_attempts: int)
     if connect_attempts <= 0:
         raise ValueError("connect_attempts must be positive")
 
+    # On Windows, device address might need to be converted to lowercase
+    address = address.lower()
     last_exc: Exception | None = None
     for attempt in range(1, connect_attempts + 1):
         client = BleakClient(address)
@@ -190,6 +196,45 @@ def extract_notify_uuids(services: Sequence[ServiceInfo]) -> list[str]:
             if "notify" in props or "indicate" in props:
                 notify_uuids.append(ch.uuid)
     return notify_uuids
+
+
+def _effective_auto_notify_uuids(services: Sequence[ServiceInfo]) -> list[str]:
+    """Return auto-notify UUIDs after excluding non-data characteristics."""
+    uuids = extract_notify_uuids(services)
+    return [u for u in uuids if u.lower() != GATT_SERVICE_CHANGED_UUID]
+
+
+def _format_uuid_list(uuids: Sequence[str], *, max_items: int) -> str:
+    """Format a potentially-long UUID list for error messages."""
+    if max_items <= 0:
+        raise ValueError("max_items must be positive")
+
+    total = len(uuids)
+    if total == 0:
+        return "[]"
+
+    shown = list(uuids[:max_items])
+    shown_str = ", ".join(repr(u) for u in shown)
+
+    if total > max_items:
+        return f"[{shown_str}, ... (+{total - max_items} more)]"
+
+    return f"[{shown_str}]"
+
+
+def _format_subscribe_failures(failures: Sequence[NotifyFailure], *, max_items: int) -> str:
+    """Format notify subscription failures for error messages."""
+    if max_items <= 0:
+        raise ValueError("max_items must be positive")
+
+    if not failures:
+        return "[]"
+
+    shown = list(failures[:max_items])
+    parts = [f"{f.uuid}: {f.error}" for f in shown]
+    if len(failures) > max_items:
+        parts.append(f"... (+{len(failures) - max_items} more)")
+    return "; ".join(parts)
 
 
 async def _subscribe_notifications(
@@ -276,7 +321,7 @@ async def _resolve_notify_uuids(
     if auto_notify:
         if services_info is None:
             raise RuntimeError("services_info must be available for auto_notify")
-        effective_notify_uuids = extract_notify_uuids(services_info)
+        effective_notify_uuids = _effective_auto_notify_uuids(services_info)
     else:
         _require_nonempty(notify_uuids, "notify_uuids")
         effective_notify_uuids = list(notify_uuids)
@@ -287,9 +332,42 @@ async def _resolve_notify_uuids(
     return effective_notify_uuids
 
 
-def _require_subscribed(subscribed: Sequence[str]) -> None:
-    if not subscribed:
-        raise RuntimeError("Failed to subscribe to any notify characteristics")
+def _require_subscribed(
+    subscribed: Sequence[str],
+    *,
+    address: str,
+    attempted: Sequence[str],
+    failures: Sequence[NotifyFailure],
+    available_notify_uuids: Sequence[str] | None,
+    services_error: Exception | None,
+) -> None:
+    if subscribed:
+        return
+
+    if not address:
+        raise ValueError("address must be non-empty")
+
+    msg_lines = [
+        "Failed to subscribe to any notify characteristics.",
+        f"Address: {address}",
+        f"Attempted UUIDs: {_format_uuid_list(attempted, max_items=8)}",
+        f"Errors: {_format_subscribe_failures(failures, max_items=8)}",
+    ]
+
+    if available_notify_uuids is not None:
+        msg_lines.append(
+            "Available notify/indicate UUIDs from service discovery: "
+            + _format_uuid_list(available_notify_uuids, max_items=12)
+        )
+    elif services_error is not None:
+        msg_lines.append(f"Service discovery after failure also failed: {services_error!r}")
+
+    msg_lines.append(
+        "Hint: run with --print-gatt to inspect the device GATT; "
+        "if needed, pass --notify-uuid explicitly or use --auto-notify."
+    )
+
+    raise RuntimeError("\n".join(msg_lines))
 
 
 def _raise_on_stop_errors(stop_errors: Sequence[str], caught: Exception | None) -> None:
@@ -358,7 +436,24 @@ async def stream_notifications(
         subscribed, failures = await _subscribe_notifications(
             client, effective_notify_uuids, handler, timeout_s
         )
-        _require_subscribed(subscribed)
+
+        available_notify_uuids: list[str] | None = None
+        services_error: Exception | None = None
+        if not subscribed:
+            try:
+                services_info = await _get_services_info(client, timeout_s)
+                available_notify_uuids = _effective_auto_notify_uuids(services_info)
+            except Exception as exc:
+                services_error = exc
+
+        _require_subscribed(
+            subscribed,
+            address=address,
+            attempted=effective_notify_uuids,
+            failures=failures,
+            available_notify_uuids=available_notify_uuids,
+            services_error=services_error,
+        )
 
         await _run_stream_loop(run_seconds, poll_interval, max_notifications, get_count)
     except Exception as exc:
