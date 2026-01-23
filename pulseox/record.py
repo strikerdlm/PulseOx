@@ -9,7 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-from pulseox.decode import DecodedFrame, decode_payload, hexlify
+from pulseox.decode import DecodedFrame, decode_a340b_lk_notification, decode_payload, hexlify
+
+# A340B-LK device-specific packet types observed on the notify characteristic.
+_A340B_LK_NON_MEASUREMENT_PREFIXES = (0xF0, 0xF2)
 
 CSV_FIELDNAMES: tuple[str, ...] = (
     "timestamp_utc",
@@ -199,10 +202,30 @@ class PulseOxCsvRecorder:
             if (now_mono - self._last_write_mono) < self._min_interval_s:
                 return
 
-        decoded, remainder = decode_payload(data)
-        selected = _select_frame(decoded, include_implausible=self._include_implausible)
-        if selected is None:
-            return
+        payload = bytes(data)
+
+        # Prefer the A340B-LK measurement packet (0xF1 ...) when present.
+        selected: DecodedFrame | None = None
+        remainder: bytes = b""
+
+        frame = decode_a340b_lk_notification(payload)
+        if frame is not None:
+            if frame.plausible or self._include_implausible:
+                selected = frame
+                remainder = b""
+            else:
+                return
+        else:
+            # On A340B-LK, other high-rate packets (e.g., 0xF0 waveform-like)
+            # can look like plausible 5-byte frames but do not represent
+            # SpO2/HR measurements. Skip them to avoid garbage CSV rows.
+            if payload and payload[0] in _A340B_LK_NON_MEASUREMENT_PREFIXES and len(payload) != 5:
+                return
+
+            decoded, remainder = decode_payload(payload)
+            selected = _select_frame(decoded, include_implausible=self._include_implausible)
+            if selected is None:
+                return
 
         ts = self._now_utc().isoformat(timespec="milliseconds")
         elapsed_s = now_mono - self._start_mono
