@@ -14,6 +14,12 @@ class DecodedFrame:
     raw: bytes
 
 
+# A340B-LK measurement notifications are observed as:
+#   f1 <spo2> <pulse> ...
+# where the remaining bytes appear to be device-specific metadata.
+A340B_LK_MEASUREMENT_PREFIX = 0xF1
+
+
 def _require_bytes(data: object, name: str) -> bytes:
     if not isinstance(data, bytes | bytearray):
         raise TypeError(f"{name} must be bytes or bytearray")
@@ -85,6 +91,51 @@ def decode_payload(payload: bytes | bytearray) -> tuple[list[DecodedFrame], byte
     for frame in frames:
         decoded.append(decode_5byte_frame(frame))
     return decoded, remainder
+
+
+def decode_a340b_lk_notification(payload: bytes | bytearray) -> DecodedFrame | None:
+    """Decode an A340B-LK measurement notification.
+
+    Observed format:
+        f1 <spo2_percent> <pulse_bpm> ...
+
+    Returns:
+        DecodedFrame if payload matches the A340B-LK measurement pattern, else None.
+
+    Notes:
+        perfusion_index is not known for this packet type and is reported as 0.
+    """
+    data = _require_bytes(payload, "payload")
+    if len(data) < 3:
+        return None
+    if data[0] != A340B_LK_MEASUREMENT_PREFIX:
+        return None
+
+    spo2_percent = int(data[1])
+    pulse_bpm = int(data[2])
+    perfusion_index = 0
+    plausible = 0 <= spo2_percent <= 100 and 20 <= pulse_bpm <= 250
+
+    return DecodedFrame(
+        spo2_percent=spo2_percent,
+        pulse_bpm=pulse_bpm,
+        perfusion_index=perfusion_index,
+        plausible=plausible,
+        raw=data,
+    )
+
+
+def decode_notification(payload: bytes | bytearray) -> tuple[list[DecodedFrame], bytes]:
+    """Best-effort decode for a single notification payload.
+
+    This function tries known device-specific formats first (e.g., A340B-LK),
+    then falls back to generic 5-byte frame decoding.
+    """
+    frame = decode_a340b_lk_notification(payload)
+    if frame is not None:
+        return [frame], b""
+
+    return decode_payload(payload)
 
 
 def hexlify(data: bytes | bytearray) -> str:
