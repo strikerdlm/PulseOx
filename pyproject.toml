@@ -20,8 +20,7 @@ reportUnknownArgumentType = "error"
 reportUnknownLambdaType = "error"
 reportUnknownVariableType = "error"
 pythonVersion = "3.11"
-venvPath = "."
-venv = "pulseox"
+exclude = ["streamlit_app.py"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

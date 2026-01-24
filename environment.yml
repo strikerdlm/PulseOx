@@ -6,6 +6,9 @@ dependencies:
   - pip=24.0
   - pip:
       - bleak==0.22.2
+      - plotly==6.5.2
       - pytest==8.2.0
       - ruff==0.6.9
       - pyright==1.1.390
+      - streamlit==1.53.1
+      - streamlit-autorefresh==1.0.1
