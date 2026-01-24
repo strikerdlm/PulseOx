@@ -233,14 +233,17 @@ def _render(st: Any) -> None:
     except FileNotFoundError:
         st.error(f"CSV not found: `{settings.csv_path}`")
         st.stop()
+        return
     except Exception as e:  # noqa: BLE001 - UI boundary; report and stop.
         st.error(f"Failed to load CSV: {e}")
         st.stop()
+        return
 
     latest, prev = latest_two(samples)
     if latest is None:
         st.info("No samples available yet. Start recording with `--csv ... --quiet`.")
         st.stop()
+        return
 
     prev_spo2 = prev.spo2_percent if prev is not None else None
     prev_hr = prev.pulse_bpm if prev is not None else None
