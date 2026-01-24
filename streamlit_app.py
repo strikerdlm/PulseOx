@@ -244,6 +244,7 @@ def _render(st: Any) -> None:
 
     prev_spo2 = prev.spo2_percent if prev is not None else None
     prev_hr = prev.pulse_bpm if prev is not None else None
+    latest_time = latest.timestamp_utc.isoformat(timespec="seconds")
 
     top_left, top_right = st.columns([2, 1], gap="large")
     with top_left:
@@ -257,7 +258,7 @@ def _render(st: Any) -> None:
             f"""
 <div class="pulseox-card">
   <div class="pulseox-muted">Latest sample</div>
-  <div style="font-size: 1.05rem;"><b>Time</b>: {latest.timestamp_utc.isoformat(timespec="seconds")}</div>
+  <div style="font-size: 1.05rem;"><b>Time</b>: {latest_time}</div>
   <div style="font-size: 1.05rem;"><b>Sender</b>: <code>{latest.sender}</code></div>
   <div style="font-size: 1.05rem;"><b>Plausible</b>: {"Yes" if latest.plausible else "No"}</div>
 </div>

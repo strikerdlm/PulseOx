@@ -153,8 +153,7 @@ def parse_samples_from_csv_text(
 def _iter_file_lines(path: Path) -> Iterator[str]:
     # Separated for testability/mocking.
     with path.open("r", encoding="utf-8", newline="") as f:
-        for line in f:
-            yield line
+        yield from f
 
 
 def read_csv_tail_text(path: str, *, max_data_rows: int) -> str:
