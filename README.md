@@ -29,6 +29,21 @@ conda env create -f environment.yml
 conda activate pulseox
 ```
 
+## Dashboard (Streamlit)
+This repo includes a lightweight Streamlit dashboard that visualizes the most recent rows from a PulseOx CSV recording (large SpO₂ gauge + HR gauge + trends).
+
+### 1) Record to CSV (terminal 1)
+```bash
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv --csv-overwrite --duration 600 --quiet
+```
+
+### 2) Run the dashboard (terminal 2)
+```bash
+python -m streamlit run streamlit_app.py
+```
+
+In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
+
 ## Manual / usage
 
 ### 1) Scan and pick a device interactively
