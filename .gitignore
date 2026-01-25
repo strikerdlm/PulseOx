@@ -11,3 +11,4 @@ venv/
 .vscode/
 .idea/
 session.csv
+build.log
