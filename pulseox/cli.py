@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import TextIO
@@ -14,7 +15,11 @@ from pulseox.ble import (
     stream_notifications,
 )
 from pulseox.decode import decode_notification, hexlify
+from pulseox.logging_utils import configure_logging
 from pulseox.record import PulseOxCsvRecorder, open_csv_path
+
+# NOTE: Keep CLI output print-based for UX, but use logging for debug/tracebacks.
+logger = logging.getLogger(__name__)
 
 # Default notify characteristic UUID for the tested oximeter.
 #
@@ -219,6 +224,19 @@ async def _run(args: argparse.Namespace) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="BLE reader for LPOW A340B (best-effort)")
+    parser.add_argument(
+        "--log-level",
+        default=None,
+        help=(
+            "Logging level for debug output (overrides PULSEOX_LOG_LEVEL). "
+            "One of: DEBUG, INFO, WARNING, ERROR, CRITICAL."
+        ),
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Shortcut for debug logging (sets log level to DEBUG unless --log-level is set).",
+    )
     parser.add_argument("--scan", action="store_true", help="Scan and list nearby BLE devices")
     parser.add_argument(
         "--scan-only",
@@ -315,9 +333,18 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     try:
+        resolved_level = configure_logging(level=args.log_level, debug=bool(args.debug))
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
+    logger.debug("Logging initialized (level=%s).", resolved_level)
+    try:
         asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nStopped by user.")
+    except Exception:
+        # Ensure we always get a traceback in the terminal.
+        logger.exception("Unhandled exception in CLI.")
+        raise
 
 
 if __name__ == "__main__":
