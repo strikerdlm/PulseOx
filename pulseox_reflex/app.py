@@ -1,12 +1,25 @@
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownVariableType=false
+# pyright: reportArgumentType=false, reportCallIssue=false, reportUnusedFunction=false
+# pyright: reportMissingTypeStubs=false
+# NOTE: Reflex + Plotly have incomplete/partial type stubs in strict mode.
+# We keep the core data/validation logic fully typed, and relax only the
+# UI-layer unknown-member noise in this module.
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Sequence, TypedDict
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import TypedDict
 
 import plotly.graph_objects as go
 import reflex as rx
 
-from pulseox.dashboard_data import PulseOxSample, latest_two, load_recent_samples_from_path, samples_to_series
+from pulseox.dashboard_data import (
+    PulseOxSample,
+    latest_two,
+    load_recent_samples_from_path,
+    samples_to_series,
+)
 
 DEFAULT_CSV_PATH = "validated_60s.csv"
 MIN_WINDOW_ROWS = 20
@@ -14,6 +27,7 @@ MAX_WINDOW_ROWS = 500
 MAX_TABLE_ROWS = 50
 MIN_REFRESH_S = 0.0
 MAX_REFRESH_S = 5.0
+MAX_WIDTH = "1280px"
 
 
 class SampleRow(TypedDict):
@@ -286,7 +300,7 @@ class DashboardState(rx.State):
         self.refresh_s = parsed
         self.error_message = ""
 
-    def set_only_plausible(self, value: bool) -> None:
+    def set_only_plausible(self, value: object) -> None:
         """Update plausible-only filtering with validation."""
         if not isinstance(value, bool):
             self._set_error("only_plausible must be a bool")
@@ -324,7 +338,9 @@ class DashboardState(rx.State):
         if latest is None:
             self._clear_samples()
             self.error_message = ""
-            self.status_message = "No samples available yet. Start recording with --csv ... --quiet."
+            self.status_message = (
+                "No samples available yet. Start recording with --csv ... --quiet."
+            )
             return
 
         self.latest_spo2 = latest.spo2_percent
@@ -336,7 +352,7 @@ class DashboardState(rx.State):
         self.latest_plausible = "Yes" if latest.plausible else "No"
         self.trend_ts, self.trend_spo2, self.trend_hr = _series_from_samples(samples)
         self.table_rows = _table_rows_from_samples(samples[-MAX_TABLE_ROWS:])
-        self.last_updated_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self.last_updated_utc = datetime.now(UTC).isoformat(timespec="seconds")
         self.error_message = ""
         self.status_message = ""
 
@@ -381,6 +397,10 @@ APP_BACKGROUND = (
 CARD_BG = "rgba(15, 23, 42, 0.7)"
 CARD_BORDER = "1px solid rgba(148, 163, 184, 0.2)"
 TEXT_MUTED = "rgba(226, 232, 240, 0.72)"
+TEXT_SOFT = "rgba(226, 232, 240, 0.85)"
+ACCENT_BLUE = "rgba(59, 130, 246, 1.0)"
+ACCENT_GREEN = "rgba(16, 185, 129, 1.0)"
+SURFACE_GLASS = "rgba(15, 23, 42, 0.55)"
 
 
 def _card(*children: rx.Component, min_width: str | None = None) -> rx.Component:
@@ -397,15 +417,158 @@ def _card(*children: rx.Component, min_width: str | None = None) -> rx.Component
     return rx.box(*children, style=style)
 
 
-def _header() -> rx.Component:
-    """Render the dashboard header card."""
-    return _card(
-        rx.heading("PulseOx Dashboard", size="7"),
-        rx.text(
-            "Live view for CSV recordings from python -m pulseox.cli --csv ... --quiet",
-            color=TEXT_MUTED,
-            size="3",
+def _pill(*children: rx.Component, color: str, background: str) -> rx.Component:
+    """Create a small pill/badge."""
+    return rx.box(
+        rx.hstack(*children, spacing="2", align="center"),
+        style={
+            "display": "inline-flex",
+            "align_items": "center",
+            "gap": "8px",
+            "padding": "6px 10px",
+            "border_radius": "9999px",
+            "border": "1px solid rgba(148, 163, 184, 0.25)",
+            "background": background,
+            "color": color,
+        },
+    )
+
+
+def _label(text: str) -> rx.Component:
+    """Render a small form label."""
+    return rx.text(text, color=TEXT_MUTED, size="2", style={"font_weight": "600"})
+
+
+def _help(text: str) -> rx.Component:
+    """Render muted helper text."""
+    return rx.text(text, color=TEXT_MUTED, size="1")
+
+
+def _live_dot(enabled: bool) -> rx.Component:
+    """Render an enabled/disabled indicator dot."""
+    if enabled:
+        return rx.box(
+            style={
+                "width": "10px",
+                "height": "10px",
+                "border_radius": "9999px",
+                "background": ACCENT_GREEN,
+                "box_shadow": "0 0 0 4px rgba(16,185,129,0.12)",
+            }
+        )
+    return rx.box(
+        style={
+            "width": "10px",
+            "height": "10px",
+            "border_radius": "9999px",
+            "background": "rgba(148, 163, 184, 0.7)",
+        }
+    )
+
+
+def _topbar() -> rx.Component:
+    """Render a modern, sticky top bar."""
+    live_pill = rx.cond(
+        DashboardState.refresh_enabled,
+        _pill(
+            _live_dot(True),
+            rx.text("Live", size="2", style={"font_weight": "700"}),
+            color=TEXT_SOFT,
+            background="rgba(16,185,129,0.10)",
         ),
+        _pill(
+            _live_dot(False),
+            rx.text("Paused", size="2", style={"font_weight": "700"}),
+            color=TEXT_SOFT,
+            background="rgba(148, 163, 184, 0.10)",
+        ),
+    )
+
+    refresh_text = rx.cond(
+        DashboardState.refresh_enabled,
+        rx.text(
+            f"Refresh: {DashboardState.refresh_s}s",
+            size="2",
+            color=TEXT_MUTED,
+            style={"font_weight": "600"},
+        ),
+        rx.text(
+            "Refresh: off",
+            size="2",
+            color=TEXT_MUTED,
+            style={"font_weight": "600"},
+        ),
+    )
+
+    updated_text = rx.cond(
+        DashboardState.last_updated_utc != "",
+        rx.text(
+            f"Updated: {DashboardState.last_updated_utc}",
+            size="2",
+            color=TEXT_MUTED,
+            style={"font_weight": "600"},
+        ),
+        rx.text("", size="2"),
+    )
+
+    return rx.box(
+        rx.container(
+            rx.hstack(
+                rx.vstack(
+                    rx.hstack(
+                        rx.text(
+                            "PulseOx",
+                            size="5",
+                            style={
+                                "letter_spacing": "-0.02em",
+                                "font_weight": "800",
+                            },
+                        ),
+                        _pill(
+                            rx.text("Dashboard", size="1", style={"font_weight": "700"}),
+                            color=TEXT_SOFT,
+                            background="rgba(59,130,246,0.10)",
+                        ),
+                        spacing="3",
+                        align="center",
+                    ),
+                    rx.text(
+                        "Live CSV view for recordings from "
+                        "`python -m pulseox.cli --csv ... --quiet`",
+                        color=TEXT_MUTED,
+                        size="2",
+                        style={"max_width": "760px"},
+                    ),
+                    spacing="1",
+                    align="start",
+                ),
+                rx.hstack(
+                    rx.vstack(live_pill, refresh_text, updated_text, spacing="1", align="end"),
+                    rx.button(
+                        "Refresh",
+                        on_click=DashboardState.refresh,
+                        color_scheme="sky",
+                        variant="solid",
+                    ),
+                    spacing="4",
+                    align="center",
+                ),
+                justify="between",
+                align="center",
+                width="100%",
+                spacing="4",
+            ),
+            max_width=MAX_WIDTH,
+            padding="16px 24px",
+        ),
+        style={
+            "position": "sticky",
+            "top": "0",
+            "z_index": "20",
+            "background": SURFACE_GLASS,
+            "backdrop_filter": "blur(14px)",
+            "border_bottom": "1px solid rgba(148, 163, 184, 0.15)",
+        },
     )
 
 
@@ -440,20 +603,22 @@ def _status_banner() -> rx.Component:
 def _sidebar() -> rx.Component:
     """Render sidebar controls."""
     return _card(
-        rx.heading("Controls", size="5"),
-        rx.text("Data source", color=TEXT_MUTED, size="2"),
+        rx.heading("Controls", size="5", style={"letter_spacing": "-0.01em"}),
+        _label("CSV path"),
         rx.input(
             value=DashboardState.csv_path,
             on_change=DashboardState.set_csv_path,
             placeholder="path/to/session.csv",
             size="3",
+            width="100%",
         ),
+        _help("Tip: record data with `--csv session.csv --quiet`, then point the dashboard at it."),
         rx.checkbox(
             text="Only plausible samples",
             checked=DashboardState.only_plausible,
             on_change=DashboardState.set_only_plausible,
         ),
-        rx.text("Window (rows)", color=TEXT_MUTED, size="2"),
+        _label("Window (rows)"),
         rx.input(
             type="number",
             min=MIN_WINDOW_ROWS,
@@ -461,8 +626,9 @@ def _sidebar() -> rx.Component:
             step=10,
             value=DashboardState.window_rows,
             on_change=DashboardState.set_window_rows,
+            width="100%",
         ),
-        rx.text("Auto-refresh (seconds)", color=TEXT_MUTED, size="2"),
+        _label("Auto-refresh (seconds)"),
         rx.input(
             type="number",
             min=MIN_REFRESH_S,
@@ -470,10 +636,20 @@ def _sidebar() -> rx.Component:
             step=0.5,
             value=DashboardState.refresh_s,
             on_change=DashboardState.set_refresh_s,
+            width="100%",
         ),
-        rx.button("Refresh now", on_click=DashboardState.refresh, color_scheme="sky"),
+        rx.hstack(
+            rx.button(
+                "Refresh now",
+                on_click=DashboardState.refresh,
+                color_scheme="sky",
+                width="100%",
+            ),
+            spacing="2",
+            width="100%",
+        ),
         rx.separator(),
-        rx.text("Recorder (example)", size="2", color=TEXT_MUTED),
+        _label("Recorder command (example)"),
         rx.box(
             rx.text(
                 'python -m pulseox.cli --address "FF:FF:FF:FF:00:21" '
@@ -495,11 +671,26 @@ def _sidebar() -> rx.Component:
 def _latest_card() -> rx.Component:
     """Render the latest sample summary."""
     return _card(
-        rx.text("Latest sample", size="3", color=TEXT_MUTED),
-        rx.text(f"Time: {DashboardState.latest_time}", size="3"),
-        rx.text(f"Sender: {DashboardState.latest_sender}", size="3"),
-        rx.text(f"Plausible: {DashboardState.latest_plausible}", size="3"),
-        rx.text(f"Updated (UTC): {DashboardState.last_updated_utc}", size="2", color=TEXT_MUTED),
+        rx.text("Latest sample", size="2", color=TEXT_MUTED, style={"font_weight": "700"}),
+        rx.separator(),
+        rx.vstack(
+            rx.hstack(
+                _label("Time"),
+                rx.text(DashboardState.latest_time, size="3"),
+                justify="between",
+            ),
+            rx.hstack(
+                _label("Sender"),
+                rx.text(DashboardState.latest_sender, size="3"),
+                justify="between",
+            ),
+            rx.hstack(
+                _label("Plausible"),
+                rx.text(DashboardState.latest_plausible, size="3"),
+                justify="between",
+            ),
+            spacing="2",
+        ),
         min_width="240px",
     )
 
@@ -520,20 +711,27 @@ def _table() -> rx.Component:
     """Render the recent samples table."""
     return _card(
         rx.heading("Recent samples", size="4"),
-        rx.table.root(
-            rx.table.header(
-                rx.table.row(
-                    rx.table.column_header_cell("Time (UTC)"),
-                    rx.table.column_header_cell("SpO2"),
-                    rx.table.column_header_cell("HR"),
-                    rx.table.column_header_cell("PI"),
-                    rx.table.column_header_cell("Plausible"),
-                    rx.table.column_header_cell("Sender"),
-                )
+        rx.box(
+            rx.table.root(
+                rx.table.header(
+                    rx.table.row(
+                        rx.table.column_header_cell("Time (UTC)"),
+                        rx.table.column_header_cell("SpO2"),
+                        rx.table.column_header_cell("HR"),
+                        rx.table.column_header_cell("PI"),
+                        rx.table.column_header_cell("Plausible"),
+                        rx.table.column_header_cell("Sender"),
+                    )
+                ),
+                rx.table.body(rx.foreach(DashboardState.table_rows, _table_row)),
+                width="100%",
+                variant="surface",
             ),
-            rx.table.body(rx.foreach(DashboardState.table_rows, _table_row)),
-            width="100%",
-            variant="surface",
+            style={
+                "overflow_x": "auto",
+                "border_radius": "12px",
+                "border": "1px solid rgba(148, 163, 184, 0.18)",
+            },
         ),
         min_width="100%",
     )
@@ -543,14 +741,38 @@ def _charts() -> rx.Component:
     """Render charts and latest metrics."""
     return rx.vstack(
         rx.flex(
-            _card(rx.plotly(data=DashboardState.spo2_fig), min_width="320px"),
-            _card(rx.plotly(data=DashboardState.hr_fig), min_width="320px"),
-            _latest_card(),
+            rx.box(
+                _card(rx.plotly(data=DashboardState.spo2_fig), min_width="360px"),
+                style={"flex": "2 1 440px"},
+            ),
+            rx.box(
+                rx.vstack(
+                    _card(rx.plotly(data=DashboardState.hr_fig), min_width="320px"),
+                    _latest_card(),
+                    spacing="4",
+                    width="100%",
+                ),
+                style={"flex": "1 1 360px"},
+            ),
             spacing="4",
             wrap="wrap",
             align="stretch",
+            width="100%",
         ),
-        _card(rx.plotly(data=DashboardState.trend_fig), min_width="100%"),
+        _card(
+            rx.vstack(
+                rx.hstack(
+                    rx.heading("Trends", size="4"),
+                    rx.text("SpO2 and HR over the most recent window", size="2", color=TEXT_MUTED),
+                    justify="between",
+                    width="100%",
+                    align="center",
+                ),
+                rx.plotly(data=DashboardState.trend_fig),
+                spacing="3",
+            ),
+            min_width="100%",
+        ),
         _table(),
         spacing="4",
         width="100%",
@@ -575,27 +797,51 @@ def index() -> rx.Component:
     """Render the main dashboard page."""
     return rx.box(
         _auto_refresh_tick(),
+        _topbar(),
         rx.container(
-            _header(),
-            _status_banner(),
-            rx.hstack(
-                _sidebar(),
-                rx.cond(
-                    DashboardState.has_samples,
-                    _charts(),
-                    _card(
-                        rx.heading("Waiting for samples", size="5"),
-                        rx.text(
-                            "Record data with --csv ... --quiet, then refresh.",
-                            color=TEXT_MUTED,
+            rx.vstack(
+                _status_banner(),
+                rx.flex(
+                    rx.box(_sidebar(), style={"flex": "0 0 340px", "width": "340px"}),
+                    rx.box(
+                        rx.cond(
+                            DashboardState.has_samples,
+                            _charts(),
+                            _card(
+                                rx.heading("Waiting for samples", size="5"),
+                                rx.text(
+                                    "Start recording with `--csv ... --quiet`, then press Refresh.",
+                                    color=TEXT_MUTED,
+                                ),
+                                rx.box(
+                                    rx.text(
+                                        "If you just started recording, it may take a few seconds "
+                                        "for rows to appear.",
+                                        color=TEXT_MUTED,
+                                        size="2",
+                                    ),
+                                    style={
+                                        "margin_top": "10px",
+                                        "padding": "10px 12px",
+                                        "border_radius": "12px",
+                                        "border": "1px solid rgba(148, 163, 184, 0.18)",
+                                        "background": "rgba(2, 6, 23, 0.25)",
+                                    },
+                                ),
+                                min_width="100%",
+                            ),
                         ),
-                        min_width="100%",
+                        style={"flex": "1 1 auto", "min_width": "0"},
                     ),
+                    spacing="5",
+                    align="start",
+                    wrap="wrap",
+                    width="100%",
                 ),
-                spacing="5",
-                align="start",
+                spacing="4",
+                width="100%",
             ),
-            max_width="1200px",
+            max_width=MAX_WIDTH,
             padding="24px",
         ),
         style={

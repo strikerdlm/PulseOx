@@ -1,4 +1,5 @@
 bleak==0.22.2
 plotly==6.5.2
+reflex==0.8.26
 streamlit==1.53.1
 streamlit-autorefresh==1.0.1
