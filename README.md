@@ -70,6 +70,11 @@ streamlit run streamlit_app.py
 
 Open the URL printed by Streamlit. In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
 
+Tip: to see debug logs/tracebacks in the terminal, set `PULSEOX_LOG_LEVEL=DEBUG`:
+```bash
+PULSEOX_LOG_LEVEL=DEBUG streamlit run streamlit_app.py
+```
+
 ## Manual / usage
 
 ### 1) Scan and pick a device interactively
