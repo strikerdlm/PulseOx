@@ -7,11 +7,15 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import TextIO
 
+from bleak.backends.device import BLEDevice
+
 from pulseox.ble import (
+    BleConnectError,
     DeviceInfo,
     ServiceInfo,
     fetch_services,
     scan_devices,
+    scan_for_device,
     stream_notifications,
 )
 from pulseox.decode import decode_notification, hexlify
@@ -133,7 +137,12 @@ def _wants_listen(args: argparse.Namespace) -> bool:
     return bool(args.auto_notify or args.notify_uuid or args.csv)
 
 
-async def _resolve_address(args: argparse.Namespace) -> str | None:
+async def _resolve_device(args: argparse.Namespace) -> BLEDevice | None:
+    """Resolve address to a BLEDevice via scan.
+
+    On Linux (BlueZ), BleakClient requires the device to be known to D-Bus.
+    We always scan to find the BLEDevice, even when --address is provided.
+    """
     address = args.address
 
     if args.scan or args.scan_only or not address:
@@ -152,12 +161,28 @@ async def _resolve_address(args: argparse.Namespace) -> str | None:
     if not address:
         raise ValueError("address is required")
 
-    return address
+    # On Linux (BlueZ), we must scan to get a BLEDevice object that BlueZ knows.
+    # Even if we just scanned above, do a targeted scan to get the raw BLEDevice.
+    logger.debug("Scanning for device %s to register with BlueZ...", address)
+    print(f"Scanning for {address}...")
+    device = await scan_for_device(address, timeout_s=args.timeout)
+    if device is None:
+        print(
+            f"\nDevice {address} not found during pre-connect scan.\n"
+            "Make sure the device is awake/advertising and try again."
+        )
+        return None
+    logger.debug("Found device: %s", device)
+    return device
 
 
-async def _maybe_print_gatt_only(args: argparse.Namespace, *, address: str) -> bool:
+async def _maybe_print_gatt_only(
+    args: argparse.Namespace,
+    *,
+    device: BLEDevice,
+) -> bool:
     if args.print_gatt and not _wants_listen(args):
-        services = await fetch_services(address=address, timeout_s=args.timeout)
+        services = await fetch_services(device, timeout_s=args.timeout)
         _print_gatt(services)
         return True
     return False
@@ -186,11 +211,11 @@ def _open_csv_recorder(args: argparse.Namespace) -> tuple[PulseOxCsvRecorder | N
 
 
 async def _run(args: argparse.Namespace) -> None:
-    address = await _resolve_address(args)
-    if address is None:
+    device = await _resolve_device(args)
+    if device is None:
         return
 
-    if await _maybe_print_gatt_only(args, address=address):
+    if await _maybe_print_gatt_only(args, device=device):
         return
 
     on_services = _print_gatt if (args.print_gatt or args.auto_notify) else None
@@ -201,7 +226,7 @@ async def _run(args: argparse.Namespace) -> None:
     try:
         on_payload = _make_notify_handler(recorder=recorder, quiet=args.quiet)
         result = await stream_notifications(
-            address=address,
+            device,
             notify_uuids=notify_uuids,
             auto_notify=args.auto_notify,
             on_services=on_services,
@@ -209,6 +234,7 @@ async def _run(args: argparse.Namespace) -> None:
             max_notifications=args.max_notifications,
             poll_interval=args.poll_interval,
             timeout_s=args.timeout,
+            connect_attempts=args.connect_attempts,
             on_payload=on_payload,
         )
         if result.failed:
@@ -249,6 +275,12 @@ def _parse_args() -> argparse.Namespace:
         help="When scanning, sort devices by strongest RSSI first",
     )
     parser.add_argument("--timeout", type=float, default=8.0, help="Timeout seconds for BLE ops")
+    parser.add_argument(
+        "--connect-attempts",
+        type=int,
+        default=3,
+        help="Number of bounded BLE connect attempts before failing",
+    )
     parser.add_argument("--address", help="BLE address (or UUID on macOS)")
     parser.add_argument(
         "--notify-uuid",
@@ -341,10 +373,30 @@ def main() -> None:
         asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nStopped by user.")
+    except BleConnectError as e:
+        # One concise, actionable message for the common "advertises but won't connect" case.
+        logger.debug("BLE connect error details: %s", e, exc_info=True)
+        print(
+            "\nERROR: Could not connect to BLE device.\n"
+            f"{e}\n\n"
+            "Troubleshooting:\n"
+            "- Make sure the device is awake and not already connected to a phone/OS.\n"
+            "- Move closer; weak signal can advertise but fail to connect.\n"
+            "- Try increasing timeouts/retries:\n"
+            "  python -m pulseox.cli --address <ADDR> --timeout 20 --connect-attempts 5 ...\n"
+            "- On Linux, ensure Bluetooth is unblocked and you have permissions (often group `bluetooth`).\n"
+            "- If it still fails, run `--scan --sort-rssi` to confirm the address is stable.\n"
+        )
+        raise SystemExit(2) from None
     except Exception:
-        # Ensure we always get a traceback in the terminal.
-        logger.exception("Unhandled exception in CLI.")
-        raise
+        # Avoid duplicate tracebacks: log one traceback (in debug) and exit.
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception("Unhandled exception in CLI.")
+        else:
+            logger.error(
+                "Unhandled exception in CLI. Re-run with --debug for a full traceback."
+            )
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":
