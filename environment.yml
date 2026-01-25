@@ -10,4 +10,6 @@ dependencies:
       - pytest==8.2.0
       - ruff==0.6.9
       - pyright==1.1.390
-      - reflex
+      - streamlit==1.53.1
+      - streamlit-autorefresh==1.0.1
+      - reflex==0.8.26
