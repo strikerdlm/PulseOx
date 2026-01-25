@@ -44,8 +44,19 @@ conda env create -f environment.yml
 conda activate pulseox
 ```
 
-## Dashboard (Reflex)
-This repo includes a Reflex dashboard that visualizes the most recent rows from a PulseOx CSV recording (large SpO2 gauge + HR gauge + trends).
+## Setup (pip / venv)
+If you prefer `venv`/`pip` over conda:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+```
+
+## Dashboard (Streamlit)
+This repo includes a Streamlit dashboard that visualizes the most recent rows from a PulseOx CSV recording (large SpO2 gauge + HR gauge + trends).
 
 ### 1) Record to CSV (terminal 1)
 ```bash
@@ -54,10 +65,10 @@ python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv --csv-over
 
 ### 2) Run the dashboard (terminal 2)
 ```bash
-reflex run
+streamlit run streamlit_app.py
 ```
 
-Open the URL printed by Reflex (default `http://localhost:3000`). In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
+Open the URL printed by Streamlit. In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
 
 ## Manual / usage
 
