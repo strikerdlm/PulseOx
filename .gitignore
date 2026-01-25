@@ -10,3 +10,4 @@ venv/
 .web/
 .vscode/
 .idea/
+session.csv
