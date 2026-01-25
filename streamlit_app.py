@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,9 @@ from pulseox.dashboard_data import (
     load_recent_samples_from_path,
     samples_to_series,
 )
+from pulseox.logging_utils import configure_logging
+
+logger = logging.getLogger(__name__)
 
 
 def _try_autorefresh(interval_ms: int) -> bool:
@@ -252,11 +256,11 @@ def _render(st: Any) -> None:
     top_left, top_right = st.columns([2, 1], gap="large")
     with top_left:
         st.plotly_chart(
-            _gauge_spo2(latest.spo2_percent, previous=prev_spo2), use_container_width=True
+            _gauge_spo2(latest.spo2_percent, previous=prev_spo2), width="stretch"
         )
 
     with top_right:
-        st.plotly_chart(_gauge_hr(latest.pulse_bpm, previous=prev_hr), use_container_width=True)
+        st.plotly_chart(_gauge_hr(latest.pulse_bpm, previous=prev_hr), width="stretch")
         st.markdown(
             f"""
 <div class="pulseox-card">
@@ -269,7 +273,7 @@ def _render(st: Any) -> None:
             unsafe_allow_html=True,
         )
 
-    st.plotly_chart(_trend_chart(samples), use_container_width=True)
+    st.plotly_chart(_trend_chart(samples), width="stretch")
     st.dataframe(
         [
             {
@@ -282,7 +286,7 @@ def _render(st: Any) -> None:
             }
             for s in samples[-50:]
         ],
-        use_container_width=True,
+        width="stretch",
         height=220,
     )
 
@@ -290,7 +294,12 @@ def _render(st: Any) -> None:
 def main() -> None:
     import streamlit as st  # type: ignore[import-not-found]
 
-    _render(st)
+    _ = configure_logging()
+    try:
+        _render(st)
+    except Exception:
+        logger.exception("Unhandled exception in Streamlit dashboard.")
+        raise
 
 
 if __name__ == "__main__":
