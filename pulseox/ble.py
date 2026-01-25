@@ -11,6 +11,34 @@ from bleak.backends.scanner import AdvertisementData
 from bleak.exc import BleakError
 
 
+class BleConnectError(RuntimeError):
+    """Raised when a BLE connection attempt fails after bounded retries."""
+
+    def __init__(
+        self,
+        *,
+        address: str,
+        timeout_s: float,
+        connect_attempts: int,
+        attempt: int,
+        underlying: BaseException,
+    ) -> None:
+        self.address = address
+        self.timeout_s = timeout_s
+        self.connect_attempts = connect_attempts
+        self.attempt = attempt
+        self.underlying = underlying
+
+        msg = (
+            "BLE connect failed.\n"
+            f"Address: {address}\n"
+            f"Attempt: {attempt}/{connect_attempts}\n"
+            f"Timeout: {timeout_s:.3f}s\n"
+            f"Underlying: {underlying.__class__.__name__}: {underlying}"
+        )
+        super().__init__(msg)
+
+
 @dataclass(frozen=True, slots=True)
 class DeviceInfo:
     address: str
@@ -111,20 +139,21 @@ def _require_nonempty(seq: Sequence[str], name: str) -> Sequence[str]:
     return seq
 
 
-async def scan_devices(timeout_s: float) -> list[DeviceInfo]:
-    """Scan for BLE devices with a finite timeout."""
+async def _scan_raw(timeout_s: float) -> dict[str, tuple[BLEDevice, AdvertisementData]]:
+    """Low-level scan returning raw Bleak device/adv map."""
     _require_positive(timeout_s, "timeout_s")
-    discovery_timeout = timeout_s
     op_timeout = timeout_s + 2.0
-
-    # Bleak's typing coverage varies across versions. Treat it as an untyped
-    # boundary and cast the result to our expected structure.
     scanner: Any = BleakScanner
     discovered_any = await asyncio.wait_for(
-        scanner.discover(timeout=discovery_timeout, return_adv=True),
+        scanner.discover(timeout=timeout_s, return_adv=True),
         timeout=op_timeout,
     )
-    discovered = cast(dict[str, tuple[BLEDevice, AdvertisementData]], discovered_any)
+    return cast(dict[str, tuple[BLEDevice, AdvertisementData]], discovered_any)
+
+
+async def scan_devices(timeout_s: float) -> list[DeviceInfo]:
+    """Scan for BLE devices with a finite timeout."""
+    discovered = await _scan_raw(timeout_s)
 
     results: list[DeviceInfo] = []
     for address, (dev, adv) in discovered.items():
@@ -140,30 +169,73 @@ async def scan_devices(timeout_s: float) -> list[DeviceInfo]:
     return results
 
 
-async def _connect_client(address: str, timeout_s: float, connect_attempts: int) -> BleakClient:
+async def scan_for_device(address: str, timeout_s: float) -> BLEDevice | None:
+    """Scan and return the BLEDevice for a specific address (case-insensitive).
+
+    On Linux (BlueZ), BleakClient requires the device to be known to the D-Bus
+    object manager. If you only have an address string from a previous session,
+    the device won't be found. This function scans and returns the BLEDevice
+    object, which can then be passed to BleakClient for a successful connect.
+
+    Returns:
+        The BLEDevice if found, or None if not discovered within timeout.
+    """
+    if not address:
+        raise ValueError("address must be non-empty")
+    _require_positive(timeout_s, "timeout_s")
+
+    target = address.lower()
+    discovered = await _scan_raw(timeout_s)
+    for addr, (dev, _adv) in discovered.items():
+        if addr.lower() == target:
+            return dev
+    return None
+
+
+async def _connect_client(
+    address_or_device: str | BLEDevice,
+    timeout_s: float,
+    connect_attempts: int,
+) -> BleakClient:
+    """Connect to a BLE device with bounded retries.
+
+    Args:
+        address_or_device: Either a string address or a BLEDevice from a scan.
+            On Linux (BlueZ), passing a BLEDevice is required for reliable
+            connections; passing a string alone may fail with "device not found."
+        timeout_s: Timeout per connection attempt.
+        connect_attempts: Max number of bounded retries.
+    """
     if connect_attempts <= 0:
         raise ValueError("connect_attempts must be positive")
 
-    # On Windows, device address might need to be converted to lowercase
-    address = address.lower()
-    last_exc: Exception | None = None
+    # Normalize address for error messages
+    if isinstance(address_or_device, str):
+        display_address = address_or_device.lower()
+    else:
+        display_address = address_or_device.address.lower()
+
     for attempt in range(1, connect_attempts + 1):
-        client = BleakClient(address)
+        client = BleakClient(address_or_device)
         client_any = cast(Any, client)
         try:
             await asyncio.wait_for(client_any.connect(), timeout=timeout_s)
             return client
         except Exception as exc:
-            last_exc = exc
             await _disconnect_quietly(client, timeout_s)
             if attempt >= connect_attempts or not _should_retry_connect(exc):
-                raise
+                raise BleConnectError(
+                    address=display_address,
+                    timeout_s=timeout_s,
+                    connect_attempts=connect_attempts,
+                    attempt=attempt,
+                    underlying=exc,
+                ) from exc
             # Bounded backoff to reduce immediate reconnect failures.
             await asyncio.sleep(min(0.25 * attempt, 1.0))
 
-    if last_exc is None:
-        raise RuntimeError("Connect attempts exhausted")
-    raise RuntimeError("Connect attempts exhausted") from last_exc
+    # Defensive fallback: the loop is exhaustive.
+    raise RuntimeError("Connect attempts exhausted unexpectedly")
 
 
 async def _get_services_info(client: BleakClient, timeout_s: float) -> list[ServiceInfo]:
@@ -174,13 +246,30 @@ async def _get_services_info(client: BleakClient, timeout_s: float) -> list[Serv
     return _as_service_info(services_like)
 
 
-async def fetch_services(address: str, timeout_s: float) -> list[ServiceInfo]:
-    """Connect and fetch GATT services with timeouts."""
+def _get_address(address_or_device: str | BLEDevice) -> str:
+    """Extract address string for validation/logging."""
+    if isinstance(address_or_device, str):
+        return address_or_device
+    return address_or_device.address
+
+
+async def fetch_services(
+    address_or_device: str | BLEDevice,
+    timeout_s: float,
+) -> list[ServiceInfo]:
+    """Connect and fetch GATT services with timeouts.
+
+    Args:
+        address_or_device: Either a string address or a BLEDevice from a scan.
+            On Linux (BlueZ), passing a BLEDevice is more reliable.
+        timeout_s: Timeout for BLE operations.
+    """
     _require_positive(timeout_s, "timeout_s")
-    if not address:
+    addr = _get_address(address_or_device)
+    if not addr:
         raise ValueError("address must be non-empty")
 
-    client = await _connect_client(address, timeout_s, connect_attempts=3)
+    client = await _connect_client(address_or_device, timeout_s, connect_attempts=3)
     try:
         return await _get_services_info(client, timeout_s)
     finally:
@@ -286,7 +375,7 @@ async def _run_stream_loop(
 
 
 def _validate_stream_args(
-    address: str,
+    address_or_device: str | BLEDevice,
     run_seconds: float,
     max_notifications: int,
     poll_interval: float,
@@ -300,7 +389,8 @@ def _validate_stream_args(
         raise ValueError("connect_attempts must be positive")
     if max_notifications <= 0:
         raise ValueError("max_notifications must be positive")
-    if not address:
+    addr = _get_address(address_or_device)
+    if not addr:
         raise ValueError("address must be non-empty")
 
 
@@ -376,7 +466,7 @@ def _raise_on_stop_errors(stop_errors: Sequence[str], caught: Exception | None) 
 
 
 async def stream_notifications(
-    address: str,
+    address_or_device: str | BLEDevice,
     notify_uuids: Sequence[str],
     run_seconds: float,
     max_notifications: int,
@@ -391,6 +481,11 @@ async def stream_notifications(
     """
     Subscribe to notifications and stream for a bounded duration/count.
 
+    Args:
+        address_or_device: Either a string address or a BLEDevice from a scan.
+            On Linux (BlueZ), passing a BLEDevice is more reliable because
+            BlueZ requires the device to be known to the D-Bus object manager.
+
     Notes:
         On Windows/WinRT, some devices can fail service discovery with a transient
         "Unreachable" error, especially when reconnecting quickly. This function
@@ -402,13 +497,16 @@ async def stream_notifications(
         RuntimeError: if no notifications could be subscribed
     """
     _validate_stream_args(
-        address,
+        address_or_device,
         run_seconds,
         max_notifications,
         poll_interval,
         timeout_s,
         connect_attempts,
     )
+
+    # Extract address string for error messages
+    display_address = _get_address(address_or_device)
 
     count = 0
 
@@ -423,7 +521,7 @@ async def stream_notifications(
     caught: Exception | None = None
     subscribed: list[str] = []
 
-    client = await _connect_client(address, timeout_s, connect_attempts=connect_attempts)
+    client = await _connect_client(address_or_device, timeout_s, connect_attempts=connect_attempts)
     try:
         effective_notify_uuids = await _resolve_notify_uuids(
             client,
@@ -448,7 +546,7 @@ async def stream_notifications(
 
         _require_subscribed(
             subscribed,
-            address=address,
+            address=display_address,
             attempted=effective_notify_uuids,
             failures=failures,
             available_notify_uuids=available_notify_uuids,
