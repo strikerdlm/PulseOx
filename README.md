@@ -5,6 +5,21 @@ Minimal Python CLI that scans BLE devices, prints GATT services/characteristics,
 ## Disclaimer (medical / safety)
 This project is a research/education tool. It is not medical advice and is not intended for diagnosis, treatment, or clinical decision-making. If you publish this repo, be careful with wording that implies medical intended use; regulatory status can depend heavily on intended use/claims.
 
+## Evidence-based limitations of pulse oximetry
+Pulse oximeters estimate functional arterial oxygen saturation (SpO2) using optical absorption. SpO2 is an estimate of arterial oxygen saturation (SaO2) and does not directly measure oxygen content or fractional saturation. Accuracy depends on device calibration, signal quality, and physiologic conditions.
+
+Known limitations and bias sources (see references):
+- Skin pigmentation and low perfusion can increase positive bias and missed hypoxemia in low-SaO2 ranges.
+- Motion artifact, low perfusion, and ambient light interference can degrade signal quality and increase error.
+- Dyshemoglobinemias (carboxyhemoglobin, methemoglobin) and hemoglobin variants can distort SpO2 because standard pulse oximeters estimate functional saturation rather than fractional saturation.
+- FDA notes that OTC/wellness pulse oximeters may be less accurate and lists risk factors (skin pigmentation, poor circulation, skin temperature, nail polish, tobacco use); readings should not be the sole basis for diagnosis or treatment decisions.
+
+References:
+- Leon-Valladares D, et al. "Determining factors of pulse oximetry accuracy: a literature review." (2024). https://doi.org/10.1016/j.rceng.2024.04.005
+- Gudelunas MK, et al. "Low perfusion and missed diagnosis of hypoxemia by pulse oximetry in darkly pigmented skin: a prospective study." (2022). https://doi.org/10.1213/ANE.0000000000006755
+- Al-Beltagi M, et al. "Pulse oximetry in pediatric care: Balancing advantages and limitations." (2024). https://doi.org/10.5409/wjcp.v13.i3.96950
+- FDA safety communication (Feb 19, 2021): https://www.fda.gov/news-events/fda-brief/fda-brief-fda-warns-about-limitations-and-accuracy-pulse-oximeters
+
 ## What it does (summary)
 - Scan nearby BLE devices (`--scan`)
 - Optionally prompt you to select a device to connect
@@ -29,8 +44,8 @@ conda env create -f environment.yml
 conda activate pulseox
 ```
 
-## Dashboard (Streamlit)
-This repo includes a lightweight Streamlit dashboard that visualizes the most recent rows from a PulseOx CSV recording (large SpO₂ gauge + HR gauge + trends).
+## Dashboard (Reflex)
+This repo includes a Reflex dashboard that visualizes the most recent rows from a PulseOx CSV recording (large SpO2 gauge + HR gauge + trends).
 
 ### 1) Record to CSV (terminal 1)
 ```bash
@@ -39,10 +54,10 @@ python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv --csv-over
 
 ### 2) Run the dashboard (terminal 2)
 ```bash
-python -m streamlit run streamlit_app.py
+reflex run
 ```
 
-In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
+Open the URL printed by Reflex (default `http://localhost:3000`). In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
 
 ## Manual / usage
 
