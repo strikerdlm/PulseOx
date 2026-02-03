@@ -3,6 +3,52 @@ import type { PulseOxSample, DataStatistics, TrendDataPoint } from '@/types/puls
 import { calculateStdDev } from './utils';
 
 /**
+ * API response structure for samples endpoint.
+ */
+interface SamplesApiResponse {
+  samples: PulseOxSample[];
+  metadata: {
+    totalRows: number;
+    returnedRows: number;
+    filePath: string;
+    timestamp: string;
+  };
+}
+
+/**
+ * Fetch samples from the API endpoint.
+ *
+ * @param options - Fetch options
+ * @returns Promise resolving to array of samples
+ */
+export async function fetchSamplesFromApi(options: {
+  path?: string;
+  maxRows?: number;
+  onlyPlausible?: boolean;
+}): Promise<{ samples: PulseOxSample[]; metadata: SamplesApiResponse['metadata'] }> {
+  const params = new URLSearchParams();
+
+  if (options.path) {
+    params.set('path', options.path);
+  }
+  if (options.maxRows !== undefined) {
+    params.set('maxRows', String(options.maxRows));
+  }
+  if (options.onlyPlausible !== undefined) {
+    params.set('onlyPlausible', String(options.onlyPlausible));
+  }
+
+  const response = await fetch(`/api/samples?${params.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
  * CSV row structure as parsed from file.
  */
 interface CsvRow {
