@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { PulseOxSample, DashboardSettings } from '@/types/pulseox';
 import { parseCsvText, getLatestTwo, calculateStatistics, SAMPLE_CSV_DATA } from '@/lib/data';
-import { SpO2Gauge, HeartRateGauge, TrendChart, DistributionChart } from '@/components/charts';
+import {
+  SpO2Gauge,
+  HeartRateGauge,
+  TrendChart,
+  DistributionChart,
+  VitalSignsRadar,
+  CorrelationScatter,
+} from '@/components/charts';
 import { Card, DataTable, Sidebar, References, Statistics } from '@/components/ui';
 import { cn } from '@/lib/utils';
 
@@ -286,6 +293,27 @@ export default function Dashboard(): JSX.Element {
               >
                 <DistributionChart samples={samples} />
               </Card>
+
+              {/* Advanced Analytics Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                {/* Vital Signs Radar */}
+                <Card
+                  variant="glass"
+                  title="Vital Signs Assessment"
+                  subtitle="Multi-dimensional health score analysis"
+                >
+                  <VitalSignsRadar stats={stats} />
+                </Card>
+
+                {/* Correlation Scatter */}
+                <Card
+                  variant="glass"
+                  title="SpO₂ vs Heart Rate Correlation"
+                  subtitle="Scatter plot with linear regression and clinical zones"
+                >
+                  <CorrelationScatter samples={samples} />
+                </Card>
+              </div>
 
               {/* Data Table */}
               <Card
