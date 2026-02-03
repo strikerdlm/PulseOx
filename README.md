@@ -75,6 +75,59 @@ Tip: to see debug logs/tracebacks in the terminal, set `PULSEOX_LOG_LEVEL=DEBUG`
 PULSEOX_LOG_LEVEL=DEBUG streamlit run streamlit_app.py
 ```
 
+## Dashboard (TypeScript/Next.js)
+
+A publication-quality TypeScript frontend with ECharts visualizations is available in the `frontend/` directory. This dashboard is designed for:
+
+- Q1 science journal publication standards
+- Investor demonstrations
+- Clinical research applications
+
+### Features
+
+- **SpO₂ Gauge**: Clinical threshold zones based on FDA guidance and peer-reviewed literature
+- **Heart Rate Gauge**: Physiological zones based on AHA guidelines
+- **Trend Chart**: Dual-axis time series with interactive zoom/pan
+- **Distribution Analysis**: Histograms with clinical zone coloring
+- **Vital Signs Radar**: Multi-dimensional health assessment scoring
+- **Correlation Scatter**: SpO₂ vs HR correlation with regression analysis
+- **Data Table**: Sortable measurements with status indicators
+- **Scientific References**: Expandable section with verifiable citations
+
+### Quick Start
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 to view the dashboard.
+
+### Build for Production
+
+```bash
+cd frontend
+npm run build
+npm start
+```
+
+### Technology Stack
+
+- **Next.js 14**: React framework with App Router
+- **TypeScript**: Type-safe development
+- **Tailwind CSS**: Modern utility-first styling
+- **ECharts**: Publication-quality SVG visualizations
+- **Apache ECharts for React**: React wrapper for ECharts
+
+### API Endpoint
+
+The dashboard includes an API route for loading CSV data:
+
+```
+GET /api/samples?path=validated_60s.csv&maxRows=120&onlyPlausible=true
+```
+
 ## Manual / usage
 
 ### 1) Scan and pick a device interactively
