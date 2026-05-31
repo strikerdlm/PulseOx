@@ -1,0 +1,62 @@
+{
+  "aria": { "enabled": true, "decal": { "show": false } },
+  "animation": false,
+  "grid": { "left": 70, "right": 70, "bottom": 64, "top": 34, "containLabel": true },
+  "legend": { "top": 6, "data": ["SpO2", "Heart rate"] },
+  "tooltip": { "trigger": "axis" },
+  "xAxis": {
+    "type": "value",
+    "name": "Time since start (s)",
+    "nameLocation": "middle",
+    "nameGap": 34,
+    "min": 0,
+    "max": 70
+  },
+  "yAxis": [
+    {
+      "type": "value",
+      "name": "SpO2 (%)",
+      "nameLocation": "middle",
+      "nameGap": 46,
+      "min": 80,
+      "max": 100,
+      "position": "left"
+    },
+    {
+      "type": "value",
+      "name": "Heart rate (bpm)",
+      "nameLocation": "middle",
+      "nameGap": 48,
+      "min": 50,
+      "max": 90,
+      "position": "right",
+      "splitLine": { "show": false }
+    }
+  ],
+  "series": [
+    {
+      "name": "SpO2",
+      "type": "line",
+      "yAxisIndex": 0,
+      "showSymbol": true,
+      "symbolSize": 6,
+      "smooth": true,
+      "data": [[7,90],[12,90],[17,91],[22,92],[28,92],[33,92],[39,92],[44,91],[49,89],[54,89],[59,91],[65,92]],
+      "markLine": {
+        "silent": true,
+        "symbol": "none",
+        "lineStyle": { "type": "dashed" },
+        "data": [{ "yAxis": 92, "label": { "formatter": "92% threshold" } }]
+      }
+    },
+    {
+      "name": "Heart rate",
+      "type": "line",
+      "yAxisIndex": 1,
+      "showSymbol": true,
+      "symbolSize": 6,
+      "smooth": true,
+      "data": [[7,65],[12,60],[17,60],[22,60],[28,62],[33,72],[39,80],[44,80],[49,75],[54,66],[59,69],[65,75]]
+    }
+  ]
+}

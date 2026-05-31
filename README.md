@@ -168,6 +168,36 @@ npm start
 - **IBM Plex Sans / Mono** typography
 - Live data over **WebSocket** from the FastAPI backend
 
+### Oximetry report
+
+When a session is loaded from the backend (host session, or a drag/drop file
+while the backend is running), Analysis shows a server-computed **oximetry
+report**: nadir / mean SpO₂, **T90 / T88** (time below 90% / 88%, integrated over
+real timestamps with reconnect gaps excluded), recording coverage, HR summary,
+and **ODI** (oxygen desaturation index). ODI is **rate-gated** — if the effective
+sampling rate is too coarse to resolve desaturations (e.g. the 0.2 Hz validated
+sample) it is reported as `n/a` with the reason, rather than a misleading number.
+All metric definitions live in one place, `pulseox/analysis.py`.
+
+### Exporting figures
+
+- **In-app:** every Analysis chart has `⤓ SVG / PNG` controls that export the
+  rendered figure client-side (vector SVG, or rasterized PNG).
+- **Journal-quality (offline):** render publication figures from a session with
+  the `echarts` skill — themed for Nature / NEJM / Lancet / Cell / JAMA, vector
+  SVG (or 300 DPI PNG). A ready example option lives at
+  `docs/figures/pulseox_trend_option.json`:
+
+  ```bash
+  SKILL=/root/.claude/skills/echarts
+  node "$SKILL/render.js" --option docs/figures/pulseox_trend_option.json \
+    --theme nejm --width 800 --height 500 \
+    --out pulseox-trend-nejm.svg
+  ```
+
+  The backend is **not** coupled to this Node renderer — it stays a clean local
+  Python service.
+
 ## Manual / usage
 
 ### 1) Scan and pick a device interactively
