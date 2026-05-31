@@ -215,6 +215,22 @@ def latest_two(
     return samples[-1], samples[-2]
 
 
+def sample_to_dict(sample: PulseOxSample) -> dict[str, object]:
+    """Serialize a sample to the PulseOxSample wire contract (frontend types)."""
+    return {
+        "timestamp_utc": sample.timestamp_utc.isoformat(timespec="milliseconds"),
+        "elapsed_s": sample.elapsed_s,
+        "sender": sample.sender,
+        "spo2_percent": sample.spo2_percent,
+        "pulse_bpm": sample.pulse_bpm,
+        "perfusion_index": sample.perfusion_index,
+        "plausible": sample.plausible,
+        "raw_frame_hex": sample.raw_frame_hex,
+        "raw_notification_hex": sample.raw_notification_hex,
+        "remainder_hex": sample.remainder_hex,
+    }
+
+
 def samples_to_series(
     samples: Iterable[PulseOxSample],
 ) -> tuple[list[datetime], list[int], list[int]]:
