@@ -1,6 +1,20 @@
-# PulseOx — BLE reader for pulse oximeters (tested with LPOW A340B-LK)
+# PulseOx — local pulse-oximetry monitoring stack (tested with LPOW A340B-LK)
 
-Minimal Python CLI that scans BLE devices, prints GATT services/characteristics, subscribes to notify/indicate characteristics, and prints raw + best-effort decoded SpO2/pulse frames.
+PulseOx records SpO₂ and pulse rate from a BLE pulse oximeter and turns it into
+something you can watch live and analyse afterwards. It has three parts:
+
+- **`pulseox/`** — a Python BLE package + CLI: scan, connect, decode, and record
+  to CSV, with **duration-authoritative** timing and **automatic reconnection**
+  so a timed recording runs the full duration and survives link drops.
+- **`pulseox_server/`** — a local FastAPI service that wraps the package: REST
+  control (`scan` / `start` / `stop` / `sessions` / `upload`) plus a WebSocket
+  live stream.
+- **`frontend/`** — an "aeromedical instrument console" (Next.js + TypeScript):
+  a **Live** mode to control the device and watch realtime gauges, and an
+  **Analysis** mode to import recordings and explore them with publication-grade
+  charts.
+
+Research / education only — not for diagnosis, treatment, or clinical decisions.
 
 ## Disclaimer (medical / safety)
 
@@ -24,32 +38,65 @@ References:
 - Al-Beltagi M, et al. "Pulse oximetry in pediatric care: Balancing advantages and limitations." (2024). https://doi.org/10.5409/wjcp.v13.i3.96950
 - FDA safety communication (Feb 19, 2021): https://www.fda.gov/news-events/fda-brief/fda-brief-fda-warns-about-limitations-and-accuracy-pulse-oximeters
 
-## What it does (summary)
+## Architecture
 
-- Scan nearby BLE devices (`--scan`)
-- Optionally prompt you to select a device to connect
-- Print GATT services/characteristics (`--print-gatt`)
-- Subscribe to:
-  - a specific notify characteristic (`--notify-uuid ...`), or
-  - all notify/indicate characteristics (`--auto-notify`) for discovery
-- Print:
-  - timestamp + sender + raw payload hex
-  - decoded frames using device-aware decoding (A340B‑LK `0xF1` measurements first, then generic 5‑byte fallback) with a plausibility tag
+```
+                 ┌─────────────────────────────────────────────┐
+   BLE oximeter  │  pulseox/ (Python)                           │
+  ───notify────► │   ble.py · decode.py · record.py · streaming │
+  (A340B-LK)     │   deadline-bounded loop + reconnect supervisor│
+                 └───────────────┬───────────────┬─────────────┘
+                        CLI ─────┘               │ imported by
+                 (python -m pulseox.cli)         ▼
+                                   ┌──────────────────────────────┐
+                                   │ pulseox_server/ (FastAPI)     │
+                                   │  REST: scan/start/stop/...    │
+                                   │  WebSocket: /ws/stream        │
+                                   └───────┬───────────────┬──────┘
+                                  REST/WS  │               │ writes
+                                           ▼               ▼
+                            ┌────────────────────┐   sessions/*.csv
+                            │ frontend/ (Next.js) │
+                            │  Live · Analysis    │
+                            └────────────────────┘
+```
 
-All streaming loops are bounded by `--duration` and `--max-notifications`.
+The browser cannot speak BLE, so the **backend must run on the machine with the
+Bluetooth adapter**. The CLI and the backend share the same `pulseox` core, so a
+recording made either way produces the identical CSV schema.
+
+## Quick start
+
+### Option A — full UI (control + live + analysis)
+
+```bash
+# 1) install
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt   # or: conda env create -f environment.yml
+cd frontend && npm install && cd ..
+
+# 2) run (two terminals)
+python -m pulseox_server          # backend → http://127.0.0.1:8000
+cd frontend && npm run dev        # console → http://localhost:3000
+```
+
+Open http://localhost:3000, set the device address in **Live**, and Start.
+
+### Option B — headless CLI recording
+
+```bash
+python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv \
+  --csv-overwrite --duration 600 --quiet
+```
+
+Then drop `session.csv` into the console's **Analysis** mode (or `--csv` path it
+into `sessions/`).
 
 ## Requirements
 
-- Windows with BLE support enabled
-- conda (recommended)
-- Python 3.11 (see `environment.yml`)
-
-## Setup (conda)
-
-```bash
-conda env create -f environment.yml
-conda activate pulseox
-```
+- BLE-capable host (Linux/BlueZ, Windows/WinRT, or macOS) with Bluetooth enabled
+- Python 3.11 (`pip install -r requirements.txt`, or conda via `environment.yml`)
+- Node 18+ and npm (for the `frontend/` console)
 
 ## Backend service (FastAPI + WebSocket)
 
@@ -501,7 +548,25 @@ Apache-2.0 (see `LICENSE`).
 
 ## Development
 
-- Lint: `python -m ruff check .`
-- Format: `python -m ruff format .`
-- Typecheck: `python -m pyright`
-- Tests: `pytest`
+Python (`pulseox/`, `pulseox_server/`):
+
+- Lint: `python -m ruff check pulseox pulseox_server tests`
+- Typecheck: `python -m pyright` (strict; run inside the project venv/conda env)
+- Tests: `pytest` — covers decoding, CSV recording, the deadline/reconnect
+  streaming core, the recorder, the backend session manager, and the FastAPI
+  routes (incl. a WebSocket stream test) using injected fakes — no hardware
+  required.
+
+Frontend (`frontend/`):
+
+- Lint: `npm run lint` · Types: `npm run type-check` · Build: `npm run build`
+
+### Repository layout
+
+| Path | What |
+|---|---|
+| `pulseox/` | BLE package + CLI (`ble`, `decode`, `record`, `streaming`, `cli`, `dashboard_data`, `clean_csv`) |
+| `pulseox_server/` | FastAPI backend (`app`, `session`, `hub`, `config`, `__main__`) |
+| `frontend/` | Next.js + TypeScript console (Live + Analysis) |
+| `tests/` | pytest suite |
+| `docs/superpowers/` | design specs + implementation plans |
