@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import type { PulseOxSample } from '@/types/pulseox';
+import { useEffect, useMemo, useState } from 'react';
+import type { PulseOxSample, SessionAnalysis } from '@/types/pulseox';
+import { api } from '@/lib/api';
 import { Panel } from '@/components/ui/Panel';
 import { ImportPanel } from './ImportPanel';
+import { OximetryReport } from './OximetryReport';
 import { TimeInZone } from './TimeInZone';
 import { TrendChart, DistributionChart, CorrelationScatter } from '@/components/charts';
 import { PoincarePlot } from '@/components/charts/PoincarePlot';
@@ -14,17 +16,40 @@ import { calculateStatistics } from '@/lib/data';
 export function AnalysisView(): JSX.Element {
   const [samples, setSamples] = useState<PulseOxSample[]>([]);
   const [name, setName] = useState<string | null>(null);
+  const [serverBacked, setServerBacked] = useState(false);
+  const [analysis, setAnalysis] = useState<SessionAnalysis | null>(null);
   const stats = useMemo(() => calculateStatistics(samples), [samples]);
   const hasData = samples.length > 0;
+
+  useEffect(() => {
+    if (!serverBacked || !name) {
+      setAnalysis(null);
+      return;
+    }
+    let cancelled = false;
+    setAnalysis(null);
+    api
+      .analysis(name)
+      .then((a) => {
+        if (!cancelled) setAnalysis(a);
+      })
+      .catch(() => {
+        if (!cancelled) setAnalysis(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [serverBacked, name]);
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_1fr]">
       <Panel title="Import session" className="h-fit lg:sticky lg:top-20">
         <ImportPanel
           activeName={name}
-          onLoad={(s, n) => {
+          onLoad={(s, n, backed) => {
             setSamples(s);
             setName(n);
+            setServerBacked(backed);
           }}
         />
       </Panel>
@@ -34,9 +59,13 @@ export function AnalysisView(): JSX.Element {
       ) : (
         <div className="space-y-5">
           <Panel
-            title="Session statistics"
+            title="Oximetry report"
             right={<span className="label !text-[0.6rem]">{name}</span>}
           >
+            <OximetryReport analysis={analysis} serverBacked={serverBacked} />
+          </Panel>
+
+          <Panel title="Session statistics">
             <Statistics stats={stats} />
           </Panel>
 
@@ -44,19 +73,19 @@ export function AnalysisView(): JSX.Element {
             <TimeInZone samples={samples} />
           </Panel>
 
-          <Panel title="Vital-signs trend">
+          <Panel title="Vital-signs trend" exportName="pulseox-trend">
             <div className="h-[340px]">
               <TrendChart samples={samples} />
             </div>
           </Panel>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <Panel title="Value distribution">
+            <Panel title="Value distribution" exportName="pulseox-distribution">
               <div className="h-[300px]">
                 <DistributionChart samples={samples} />
               </div>
             </Panel>
-            <Panel title="SpO₂ × HR correlation">
+            <Panel title="SpO₂ × HR correlation" exportName="pulseox-correlation">
               <div className="h-[300px]">
                 <CorrelationScatter samples={samples} />
               </div>
@@ -64,7 +93,7 @@ export function AnalysisView(): JSX.Element {
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <Panel title="Heart-rate return map">
+            <Panel title="Heart-rate return map" exportName="pulseox-poincare">
               <PoincarePlot samples={samples} />
             </Panel>
             <Panel title="Sample log" bodyClassName="p-0">

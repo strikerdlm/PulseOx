@@ -8,7 +8,7 @@ import { parseCsvText } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
 interface ImportPanelProps {
-  onLoad: (samples: PulseOxSample[], name: string) => void;
+  onLoad: (samples: PulseOxSample[], name: string, serverBacked: boolean) => void;
   activeName: string | null;
 }
 
@@ -36,22 +36,30 @@ export function ImportPanel({ onLoad, activeName }: ImportPanelProps): JSX.Eleme
     async (file: File): Promise<void> => {
       setError(null);
       try {
-        const text = await file.text();
-        const samples = parseCsvText(text, { maxRows: 5000, onlyPlausible: false });
-        if (samples.length === 0) throw new Error('No valid PulseOx rows in file');
-        onLoad(samples, file.name);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not parse file');
+        // Prefer the backend: it persists the file and yields a server-computed
+        // oximetry report. Falls back to client-side parsing when offline.
+        const res = await api.upload(file);
+        onLoad(res.samples, res.name, true);
+        void refresh();
+      } catch {
+        try {
+          const text = await file.text();
+          const samples = parseCsvText(text, { maxRows: 5000, onlyPlausible: false });
+          if (samples.length === 0) throw new Error('No valid PulseOx rows in file');
+          onLoad(samples, file.name, false);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Could not parse file');
+        }
       }
     },
-    [onLoad],
+    [onLoad, refresh],
   );
 
   const loadServer = async (name: string): Promise<void> => {
     setError(null);
     try {
       const { samples } = await api.session(name, 5000, false);
-      onLoad(samples, name);
+      onLoad(samples, name, true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load session');
     }

@@ -2,6 +2,7 @@ import type {
   DeviceInfo,
   PulseOxSample,
   RecordingParams,
+  SessionAnalysis,
   SessionMeta,
   SessionStatus,
 } from '@/types/pulseox';
@@ -91,6 +92,9 @@ export const api = {
     jsonFetch(
       `/api/sessions/${encodeURIComponent(name)}?maxRows=${maxRows}&onlyPlausible=${onlyPlausible}`,
     ),
+
+  analysis: (name: string): Promise<SessionAnalysis> =>
+    jsonFetch(`/api/sessions/${encodeURIComponent(name)}/analysis`),
 
   upload: (file: File): Promise<SessionData & { name: string }> => {
     const form = new FormData();

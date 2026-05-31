@@ -95,6 +95,45 @@ export interface RecordingParams {
   session_name?: string;
 }
 
+export interface VitalStats {
+  mean: number;
+  median: number;
+  min: number;
+  max: number;
+  std: number;
+}
+
+export interface DesatEvent {
+  start_s: number;
+  end_s: number;
+  duration_s: number;
+  nadir: number;
+  drop: number;
+}
+
+/**
+ * Server-computed oximetry metrics (/api/sessions/{name}/analysis). Computed
+ * once in `pulseox/analysis.py`; never recomputed in the frontend.
+ */
+export interface SessionAnalysis {
+  n_samples: number;
+  recorded_s: number;
+  span_s: number;
+  effective_hz: number;
+  spo2: VitalStats;
+  hr: VitalStats;
+  t90_s: number;
+  t88_s: number;
+  pct_below_90: number;
+  pct_below_88: number;
+  zone_seconds: Record<string, number>;
+  zone_pct: Record<string, number>;
+  odi: number | null;
+  odi_available: boolean;
+  odi_reason: string | null;
+  events: DesatEvent[];
+}
+
 /**
  * Frames pushed over the /ws/stream WebSocket. A `sample` frame is a
  * PulseOxSample plus a discriminating `type`; a `status` frame wraps
