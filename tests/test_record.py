@@ -198,6 +198,51 @@ def test_recorder_time_based_flush() -> None:
     assert fp.flush_count > after_first
 
 
+def test_on_notification_returns_typed_sample() -> None:
+    fp = io.StringIO()
+    clock = FakeClock([0.0, 0.0])
+    now_dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+
+    recorder = PulseOxCsvRecorder(
+        fp,
+        write_header=True,
+        sample_hz=0.0,
+        include_implausible=False,
+        flush_every=1,
+        monotonic_fn=clock.monotonic,
+        now_utc_fn=lambda: now_dt,
+    )
+
+    sample = recorder.on_notification(sender=11, data=bytes([0xF1, 0x5C, 0x46]))
+    assert sample is not None
+    assert sample["spo2_percent"] == 92
+    assert sample["pulse_bpm"] == 70
+    assert sample["perfusion_index"] == 0
+    assert sample["plausible"] is True
+    assert isinstance(sample["elapsed_s"], float)
+    assert sample["timestamp_utc"] == now_dt.isoformat(timespec="milliseconds")
+
+
+def test_on_notification_returns_none_when_skipped() -> None:
+    fp = io.StringIO()
+    clock = FakeClock([0.0, 0.0])
+    now_dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+
+    recorder = PulseOxCsvRecorder(
+        fp,
+        write_header=True,
+        sample_hz=0.0,
+        include_implausible=False,
+        flush_every=1,
+        monotonic_fn=clock.monotonic,
+        now_utc_fn=lambda: now_dt,
+    )
+
+    # F1 with pulse=0 is implausible -> skipped -> None.
+    out = recorder.on_notification(sender=11, data=bytes([0xF1, 0x00, 0x00]))
+    assert out is None
+
+
 def test_recorder_flush_is_public_and_writes() -> None:
     fp = _FlushSpy()
     clock = FakeClock([0.0, 0.0])

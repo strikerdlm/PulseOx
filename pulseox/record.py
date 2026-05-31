@@ -200,16 +200,18 @@ class PulseOxCsvRecorder:
         self._file.flush()
         self._rows_since_flush = 0
 
-    def on_notification(self, *, sender: object, data: bytes) -> None:
+    def on_notification(self, *, sender: object, data: bytes) -> dict[str, object] | None:
         """Handle one BLE notification payload.
 
         This method is synchronous and designed to be used as a Bleak
-        notification callback.
+        notification callback. Returns the typed sample dict that was written
+        (matching the PulseOxSample contract), or ``None`` if the notification
+        was rate-limited, filtered, or not a measurement.
         """
         now_mono = self._monotonic()
         if self._min_interval_s > 0 and self._last_write_mono is not None:
             if (now_mono - self._last_write_mono) < self._min_interval_s:
-                return
+                return None
 
         payload = bytes(data)
 
@@ -223,34 +225,48 @@ class PulseOxCsvRecorder:
                 selected = frame
                 remainder = b""
             else:
-                return
+                return None
         else:
             # On A340B-LK, other high-rate packets (e.g., 0xF0 waveform-like)
             # can look like plausible 5-byte frames but do not represent
             # SpO2/HR measurements. Skip them to avoid garbage CSV rows.
             if payload and payload[0] in _A340B_LK_NON_MEASUREMENT_PREFIXES and len(payload) != 5:
-                return
+                return None
 
             decoded, remainder = decode_payload(payload)
             selected = _select_frame(decoded, include_implausible=self._include_implausible)
             if selected is None:
-                return
+                return None
 
         ts = self._now_utc().isoformat(timespec="milliseconds")
         elapsed_s = now_mono - self._start_mono
-
         remainder_hex = hexlify(remainder) if remainder else ""
+
+        # Typed sample (PulseOxSample contract) — the single source of truth for
+        # both the CSV row and any realtime consumer (e.g. the backend hub).
+        sample: dict[str, object] = {
+            "timestamp_utc": ts,
+            "elapsed_s": elapsed_s,
+            "sender": format_sender(sender),
+            "spo2_percent": selected.spo2_percent,
+            "pulse_bpm": selected.pulse_bpm,
+            "perfusion_index": selected.perfusion_index,
+            "plausible": selected.plausible,
+            "raw_frame_hex": hexlify(selected.raw),
+            "raw_notification_hex": hexlify(data),
+            "remainder_hex": remainder_hex,
+        }
 
         row: dict[str, str] = {
             "timestamp_utc": ts,
             "elapsed_s": f"{elapsed_s:.6f}",
-            "sender": format_sender(sender),
+            "sender": str(sample["sender"]),
             "spo2_percent": str(selected.spo2_percent),
             "pulse_bpm": str(selected.pulse_bpm),
             "perfusion_index": str(selected.perfusion_index),
             "plausible": "1" if selected.plausible else "0",
-            "raw_frame_hex": hexlify(selected.raw),
-            "raw_notification_hex": hexlify(data),
+            "raw_frame_hex": str(sample["raw_frame_hex"]),
+            "raw_notification_hex": str(sample["raw_notification_hex"]),
             "remainder_hex": remainder_hex,
         }
 
@@ -266,3 +282,5 @@ class PulseOxCsvRecorder:
         if self._rows_since_flush >= self._flush_every or time_due:
             self.flush()
             self._last_flush_mono = now_mono
+
+        return sample
