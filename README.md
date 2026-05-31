@@ -78,34 +78,33 @@ curl -X POST http://127.0.0.1:8000/api/recording/start \
 curl -X POST http://127.0.0.1:8000/api/recording/stop
 ```
 
-## Dashboard (TypeScript/Next.js)
+## Console (TypeScript/Next.js)
 
-A publication-quality TypeScript frontend with ECharts visualizations is available in the `frontend/` directory. This dashboard is designed for:
+An "aeromedical instrument console" frontend lives in `frontend/`. It talks to the
+local FastAPI backend (above) and has two modes:
 
-- Q1 science journal publication standards
-- Investor demonstrations
-- Clinical research applications
-
-### Features
-
-- **SpO₂ Gauge**: Clinical threshold zones based on FDA guidance and peer-reviewed literature
-- **Heart Rate Gauge**: Physiological zones based on AHA guidelines
-- **Trend Chart**: Dual-axis time series with interactive zoom/pan
-- **Distribution Analysis**: Histograms with clinical zone coloring
-- **Vital Signs Radar**: Multi-dimensional health assessment scoring
-- **Correlation Scatter**: SpO₂ vs HR correlation with regression analysis
-- **Data Table**: Sortable measurements with status indicators
-- **Scientific References**: Expandable section with verifiable citations
+- **Live** — control the device from the browser (scan, address, duration,
+  sample rate, auto-reconnect, start/stop) and watch realtime SpO₂ and
+  heart-rate **instrument gauges** plus a live trace, streamed over WebSocket.
+- **Analysis** — import a recorded session (drag/drop a CSV, or pick one
+  recorded on the host) and explore it: session statistics, SpO₂
+  oxygenation-burden (time-in-zone), dual-axis trend, value distributions,
+  SpO₂ × HR correlation, a heart-rate Poincaré return map, and a sample log.
 
 ### Quick Start
 
 ```bash
+# terminal 1 — backend (must run on the machine with the BLE adapter)
+python -m pulseox_server
+
+# terminal 2 — frontend
 cd frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000 to view the dashboard.
+Open http://localhost:3000. The frontend reaches the backend at
+`http://127.0.0.1:8000` by default; override with `NEXT_PUBLIC_API_BASE`.
 
 ### Build for Production
 
@@ -117,19 +116,10 @@ npm start
 
 ### Technology Stack
 
-- **Next.js 14**: React framework with App Router
-- **TypeScript**: Type-safe development
-- **Tailwind CSS**: Modern utility-first styling
-- **ECharts**: Publication-quality SVG visualizations
-- **Apache ECharts for React**: React wrapper for ECharts
-
-### API Endpoint
-
-The dashboard includes an API route for loading CSV data:
-
-```
-GET /api/samples?path=validated_60s.csv&maxRows=120&onlyPlausible=true
-```
+- **Next.js 14** (App Router) + **TypeScript** + **Tailwind CSS**
+- **ECharts** for charts; custom SVG instrument gauges
+- **IBM Plex Sans / Mono** typography
+- Live data over **WebSocket** from the FastAPI backend
 
 ## Manual / usage
 

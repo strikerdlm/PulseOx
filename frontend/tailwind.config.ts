@@ -1,5 +1,10 @@
 import type { Config } from 'tailwindcss';
 
+/**
+ * "Aeromedical instrument console" design tokens.
+ * Dark, precise, patient-monitor-meets-cockpit. Calibrated clinical zone
+ * colors; tabular-mono numerics; hairline structure.
+ */
 const config: Config = {
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
@@ -9,42 +14,54 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Clinical color palette for safety dashboard
-        'safety-critical': '#ef4444',    // Red - critical alert
-        'safety-warning': '#f59e0b',     // Amber - warning
-        'safety-normal': '#22c55e',      // Green - normal range
-        'safety-info': '#3b82f6',        // Blue - informational
-        // Dashboard background colors
-        'dashboard-bg': '#0f172a',       // Slate 900
-        'dashboard-card': '#1e293b',     // Slate 800
-        'dashboard-border': '#334155',   // Slate 700
-        // Text colors
-        'dashboard-text': '#f1f5f9',     // Slate 100
-        'dashboard-muted': '#94a3b8',    // Slate 400
+        console: {
+          bg: '#070a0f',
+          panel: '#0c1118',
+          raised: '#11171f',
+          border: '#1b2330',
+          hair: '#232c3b',
+          ink: '#e7eef6',
+          muted: '#8b95a7',
+          faint: '#566173',
+        },
+        vital: {
+          normal: '#35d39a',
+          borderline: '#f7c24b',
+          warning: '#fb923c',
+          critical: '#fb5a72',
+          spo2: '#22d3ee',
+          hr: '#f472b6',
+        },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
+        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+      },
+      letterSpacing: {
+        label: '0.18em',
       },
       boxShadow: {
-        'glow-green': '0 0 20px rgba(34, 197, 94, 0.3)',
-        'glow-red': '0 0 20px rgba(239, 68, 68, 0.3)',
-        'glow-blue': '0 0 20px rgba(59, 130, 246, 0.3)',
-        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2)',
+        panel: '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 30px -12px rgba(0,0,0,0.7)',
       },
       animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'fade-in': 'fadeIn 0.5s ease-out',
-        'slide-up': 'slideUp 0.3s ease-out',
+        'fade-in': 'fadeIn 0.5s ease-out both',
+        rise: 'rise 0.5s cubic-bezier(0.16,1,0.3,1) both',
+        sweep: 'sweep 1.4s ease-in-out infinite',
+        'ping-dot': 'pingDot 1.6s cubic-bezier(0,0,0.2,1) infinite',
       },
       keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%': { transform: 'translateY(10px)', opacity: '0' },
+        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        rise: {
+          '0%': { transform: 'translateY(8px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        sweep: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+        pingDot: {
+          '0%': { transform: 'scale(1)', opacity: '0.7' },
+          '70%, 100%': { transform: 'scale(2.4)', opacity: '0' },
         },
       },
     },

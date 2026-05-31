@@ -1,14 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Import Inter font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 :root {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
+  --bg: #070a0f;
+  --ink: #e7eef6;
+  --spo2: #22d3ee;
+  --hr: #f472b6;
+  --normal: #35d39a;
+  --borderline: #f7c24b;
+  --warning: #fb923c;
+  --critical: #fb5a72;
 }
 
 * {
@@ -21,174 +25,134 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-feature-settings: 'ss01' on, 'ss02' on, 'cv01' on;
+  color: var(--ink);
+  background-color: var(--bg);
+  /* Cockpit field: faint instrument grid + corner glow + deep vignette. */
+  background-image:
+    linear-gradient(rgba(35, 44, 59, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(35, 44, 59, 0.35) 1px, transparent 1px),
+    radial-gradient(ellipse 1000px 560px at 12% -5%, rgba(34, 211, 238, 0.08), transparent 60%),
+    radial-gradient(ellipse 900px 520px at 92% 0%, rgba(244, 114, 182, 0.06), transparent 55%),
+    radial-gradient(ellipse 1200px 900px at 50% 120%, rgba(0, 0, 0, 0.6), transparent 70%);
+  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01' on, 'cv05' on;
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
-
 ::-webkit-scrollbar-track {
-  background: rgba(30, 41, 59, 0.5);
-  border-radius: 4px;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.8);
-  border-radius: 4px;
+  background: #1f2836;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.8);
+  background: #2b3850;
+  background-clip: content-box;
 }
 
-/* Selection color */
 ::selection {
-  background: rgba(59, 130, 246, 0.3);
+  background: rgba(34, 211, 238, 0.28);
 }
 
-/* Focus styles for accessibility */
 :focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline: 1.5px solid rgba(34, 211, 238, 0.6);
   outline-offset: 2px;
 }
 
-/* Range input styling */
+/* Instrument label: tiny, tracked-out, uppercase. */
+.label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8b95a7;
+}
+
+/* Tabular numeric readout. */
+.readout {
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on;
+  letter-spacing: -0.01em;
+}
+
+/* Panel surface. */
+.panel {
+  background: linear-gradient(180deg, rgba(17, 23, 31, 0.92), rgba(12, 17, 24, 0.92));
+  border: 1px solid #1b2330;
+  border-radius: 14px;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 10px 34px -16px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(6px);
+}
+
+.hairline {
+  border-color: #232c3b;
+}
+
+/* Range inputs in instrument cyan. */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
+  height: 22px;
 }
-
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #1c2433;
+  border-radius: 3px;
+}
+input[type='range']::-moz-range-track {
+  height: 4px;
+  background: #1c2433;
+  border-radius: 3px;
+}
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #3b82f6;
-  cursor: pointer;
+  width: 14px;
+  height: 14px;
   margin-top: -5px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-input[type='range']::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: #22d3ee;
   cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
+}
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
   border: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  background: #22d3ee;
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
 }
 
-input[type='range']::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 6px;
-  background: #334155;
-  border-radius: 3px;
-}
-
-input[type='range']::-moz-range-track {
-  width: 100%;
-  height: 6px;
-  background: #334155;
-  border-radius: 3px;
-}
-
-/* Gradient backgrounds */
-.bg-radial-gradient {
-  background: radial-gradient(
-      ellipse 1200px 600px at 15% 5%,
-      rgba(59, 130, 246, 0.15),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 900px 600px at 85% 10%,
-      rgba(16, 185, 129, 0.12),
-      transparent 55%
-    ),
-    linear-gradient(180deg, #0f172a 0%, #070a14 100%);
-}
-
-/* Animation utilities */
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 2s infinite linear;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.05),
-    transparent
-  );
-  background-size: 1000px 100%;
-}
-
-/* Pulse animation for critical alerts */
-@keyframes pulse-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* ECharts container styles */
-.echarts-container {
-  width: 100%;
-  height: 100%;
-  min-height: 200px;
-}
-
-/* Typography utilities */
 .text-balance {
   text-wrap: balance;
 }
 
-/* Print styles for publication export */
 @media print {
   body {
     background: white !important;
     color: black !important;
   }
-
   .no-print {
     display: none !important;
   }
-
-  .print-only {
-    display: block !important;
-  }
-}
-
-/* Dark theme variables for charts */
-.chart-theme-dark {
-  --chart-bg: transparent;
-  --chart-text: #e2e8f0;
-  --chart-axis: #475569;
-  --chart-grid: #334155;
 }

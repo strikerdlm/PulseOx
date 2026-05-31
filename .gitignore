@@ -11,3 +11,4 @@ venv/
 session.csv
 sessions/
 build.log
+.playwright-mcp/

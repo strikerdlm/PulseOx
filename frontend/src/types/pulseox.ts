@@ -48,6 +48,63 @@ export interface PulseOxSample {
 }
 
 /**
+ * A BLE device discovered by a scan (backend /api/scan).
+ */
+export interface DeviceInfo {
+  address: string;
+  name: string | null;
+  rssi: number | null;
+  advertised_uuids: string[];
+}
+
+export type SessionState = 'idle' | 'recording' | 'error';
+
+/**
+ * Backend recording status (/api/status, and WS status frames).
+ */
+export interface SessionStatus {
+  status: SessionState;
+  address: string | null;
+  duration_s: number | null;
+  elapsed_s: number;
+  rows: number;
+  reconnects: number;
+  ended_reason: string | null;
+  session_file: string | null;
+  error: string | null;
+}
+
+/**
+ * A recorded session file on the backend host (/api/sessions).
+ */
+export interface SessionMeta {
+  name: string;
+  size: number;
+  modified: number;
+}
+
+/**
+ * Parameters for POST /api/recording/start.
+ */
+export interface RecordingParams {
+  address: string;
+  duration_s: number;
+  sample_hz: number;
+  reconnect: boolean;
+  notify_uuid?: string;
+  session_name?: string;
+}
+
+/**
+ * Frames pushed over the /ws/stream WebSocket. A `sample` frame is a
+ * PulseOxSample plus a discriminating `type`; a `status` frame wraps
+ * SessionStatus. The frontend ignores the extra `type` field.
+ */
+export type WsFrame =
+  | ({ type: 'sample' } & PulseOxSample)
+  | ({ type: 'status' } & SessionStatus);
+
+/**
  * Dashboard UI settings for data display configuration.
  */
 export interface DashboardSettings {

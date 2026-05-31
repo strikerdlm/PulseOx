@@ -22,31 +22,31 @@ import type { EChartsOption } from 'echarts';
 export const BASE_THEME = {
   backgroundColor: 'transparent',
   textStyle: {
-    fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-    color: '#e2e8f0',
+    fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+    color: '#8b95a7',
     fontSize: 12,
   },
   title: {
     textStyle: {
-      fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+      fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
       fontWeight: 600,
-      fontSize: 16,
-      color: '#f1f5f9',
+      fontSize: 15,
+      color: '#e7eef6',
     },
     subtextStyle: {
-      fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-      fontSize: 12,
-      color: '#94a3b8',
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 11,
+      color: '#8b95a7',
     },
   },
   axisLine: {
     lineStyle: {
-      color: '#475569',
+      color: '#2a3447',
     },
   },
   splitLine: {
     lineStyle: {
-      color: '#334155',
+      color: '#19212e',
       type: 'dashed' as const,
     },
   },
@@ -57,22 +57,22 @@ export const BASE_THEME = {
  * Colors chosen for accessibility and clinical meaning.
  */
 export const SPO2_COLORS = {
-  critical: '#ef4444',    // Red - severe hypoxemia (<88%)
-  warning: '#f59e0b',     // Amber - hypoxemia (88-91%)
-  borderline: '#eab308',  // Yellow - borderline (92-94%)
-  normal: '#22c55e',      // Green - normal (95-100%)
-  primary: '#10b981',     // Emerald - main indicator
+  critical: '#fb5a72',    // severe hypoxemia (<88%)
+  warning: '#fb923c',     // hypoxemia (88-91%)
+  borderline: '#f7c24b',  // borderline (92-94%)
+  normal: '#35d39a',      // normal (95-100%)
+  primary: '#22d3ee',     // SpO₂ trace accent (instrument cyan)
 };
 
 /**
  * Heart rate clinical color palette.
  */
 export const HR_COLORS = {
-  bradycardia: '#f59e0b', // Amber - <60 bpm
-  normal: '#3b82f6',      // Blue - 60-100 bpm
-  elevated: '#eab308',    // Yellow - 100-130 bpm
-  tachycardia: '#ef4444', // Red - >130 bpm
-  primary: '#3b82f6',     // Blue - main indicator
+  bradycardia: '#f7c24b', // <50 bpm
+  normal: '#35d39a',      // 50-100 bpm
+  elevated: '#f7c24b',    // 100-130 bpm
+  tachycardia: '#fb5a72', // >130 bpm
+  primary: '#f472b6',     // HR trace accent (instrument magenta)
 };
 
 /**
@@ -722,4 +722,82 @@ function getHRBinColor(binStart: number): string {
   if (binStart < 100) return HR_COLORS.normal;
   if (binStart < 130) return HR_COLORS.elevated;
   return HR_COLORS.tachycardia;
+}
+
+/**
+ * Poincaré return map: plot vₙ against vₙ₊₁ for a numeric series, with the
+ * identity line. A compact view of short-term variability (e.g. heart rate).
+ */
+export function createPoincareOption(
+  values: number[],
+  accent: string,
+  axisName: string
+): EChartsOption {
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < values.length - 1; i++) {
+    pairs.push([values[i], values[i + 1]]);
+  }
+  const flat = values.length > 0 ? values : [0, 1];
+  const lo = Math.floor(Math.min(...flat) - 2);
+  const hi = Math.ceil(Math.max(...flat) + 2);
+
+  return {
+    ...BASE_THEME,
+    grid: { left: '12%', right: '6%', top: '12%', bottom: '14%' },
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(7, 10, 15, 0.95)',
+      borderColor: '#2a3447',
+      textStyle: { color: '#e7eef6', fontSize: 12 },
+      formatter: (p: unknown) => {
+        const d = (p as { value: [number, number] }).value;
+        return `xₙ = ${d[0]}<br/>xₙ₊₁ = ${d[1]}`;
+      },
+    },
+    xAxis: {
+      type: 'value',
+      name: `${axisName}ₙ`,
+      min: lo,
+      max: hi,
+      nameTextStyle: { color: '#8b95a7', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#2a3447' } },
+      axisLabel: { color: '#8b95a7', fontSize: 10 },
+      splitLine: { lineStyle: { color: '#19212e', type: 'dashed' } },
+    },
+    yAxis: {
+      type: 'value',
+      name: `${axisName}ₙ₊₁`,
+      min: lo,
+      max: hi,
+      nameTextStyle: { color: '#8b95a7', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#2a3447' } },
+      axisLabel: { color: '#8b95a7', fontSize: 10 },
+      splitLine: { lineStyle: { color: '#19212e', type: 'dashed' } },
+    },
+    series: [
+      {
+        type: 'line',
+        data: [
+          [lo, lo],
+          [hi, hi],
+        ],
+        showSymbol: false,
+        lineStyle: { color: '#39455a', type: 'dashed', width: 1 },
+        silent: true,
+        z: 1,
+      },
+      {
+        type: 'scatter',
+        data: pairs,
+        symbolSize: 8,
+        itemStyle: {
+          color: accent,
+          opacity: 0.55,
+          borderColor: accent,
+          borderWidth: 0.5,
+        },
+        z: 2,
+      },
+    ],
+  };
 }
