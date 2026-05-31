@@ -586,13 +586,13 @@ async def stream_notifications(
         return session
 
     async def run_session(session: OpenedSession, deadline: float) -> str:
-        client = cast(BleakClient, session.handle)
+        client_any = cast(Any, session.handle)
         return await run_until_deadline(
             deadline=deadline,
             poll_interval=poll_interval,
             max_notifications=max_notifications,
             get_count=get_count,
-            is_connected=lambda: bool(client.is_connected),
+            is_connected=lambda: bool(client_any.is_connected),
             monotonic_fn=monotonic_fn,
             sleep_fn=sleep_fn,
         )

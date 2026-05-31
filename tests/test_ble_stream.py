@@ -1,8 +1,10 @@
 import asyncio
+from collections.abc import Sequence
 
 import pytest
 
 import pulseox.ble as ble
+from pulseox.streaming import NotifyFailure
 
 
 class FakeAsyncClock:
@@ -37,22 +39,35 @@ class FakeClient:
 def _patch_ble(monkeypatch: pytest.MonkeyPatch, clients: list[FakeClient]) -> None:
     it = iter(clients)
 
-    async def fake_connect(target, timeout_s, connect_attempts):  # noqa: ANN001
+    async def fake_connect(
+        target: object, timeout_s: float, connect_attempts: int
+    ) -> FakeClient:
         return next(it)
 
-    async def fake_resolve(client, notify_uuids, *, auto_notify, on_services, timeout_s):  # noqa: ANN001
+    async def fake_resolve(
+        client: object,
+        notify_uuids: Sequence[str],
+        *,
+        auto_notify: bool,
+        on_services: object,
+        timeout_s: float,
+    ) -> list[str]:
         return ["0000fff6-0000-1000-8000-00805f9b34fb"]
 
-    async def fake_subscribe(client, uuids, handler, timeout_s):  # noqa: ANN001
+    async def fake_subscribe(
+        client: object, uuids: Sequence[str], handler: object, timeout_s: float
+    ) -> tuple[list[str], list[NotifyFailure]]:
         return (list(uuids), [])
 
-    async def fake_stop(client, subscribed, timeout_s):  # noqa: ANN001
+    async def fake_stop(
+        client: object, subscribed: Sequence[str], timeout_s: float
+    ) -> list[str]:
         return []
 
-    async def fake_disconnect(client, timeout_s):  # noqa: ANN001
+    async def fake_disconnect(client: object, timeout_s: float) -> None:
         return None
 
-    async def fake_scan(address, timeout_s):  # noqa: ANN001
+    async def fake_scan(address: str, timeout_s: float) -> object:
         return object()
 
     monkeypatch.setattr(ble, "_connect_client", fake_connect)
