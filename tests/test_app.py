@@ -114,6 +114,21 @@ def test_get_missing_session_404(tmp_path: Path) -> None:
         assert client.get("/api/sessions/nope.csv").status_code == 404
 
 
+def test_session_analysis(tmp_path: Path) -> None:
+    header = ",".join(CSV_FIELDNAMES)
+    rows = "\n".join(
+        f"2026-01-01T00:00:{s:02d}.000+00:00,{float(s):.6f},0x000b,{spo2},70,0,1,f1,f1,"
+        for s, spo2 in enumerate([95, 95, 88, 88, 90])
+    )
+    (tmp_path / "an.csv").write_text(f"{header}\n{rows}\n", encoding="utf-8")
+    with _make_client(tmp_path) as client:
+        body = client.get("/api/sessions/an.csv/analysis").json()
+        assert body["n_samples"] == 5
+        assert body["spo2"]["min"] == 88
+        assert body["t90_s"] >= 0
+        assert "odi_available" in body
+
+
 def test_upload_csv(tmp_path: Path) -> None:
     header = ",".join(CSV_FIELDNAMES)
     row = "2026-01-01T00:00:00.000+00:00,0.000000,0x000b,97,72,0,1,f1-61-48,f1-61-48,"

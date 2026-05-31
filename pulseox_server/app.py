@@ -20,6 +20,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from pulseox.analysis import analyze_samples
 from pulseox.dashboard_data import load_recent_samples_from_path, sample_to_dict
 from pulseox_server.config import (
     ALLOWED_ORIGINS,
@@ -123,6 +124,14 @@ def create_app(  # noqa: C901 - FastAPI route handlers are nested by design
             "samples": [sample_to_dict(s) for s in samples],
             "metadata": {"name": path.name, "returnedRows": len(samples)},
         }
+
+    @app.get("/api/sessions/{name}/analysis")
+    async def session_analysis(name: str) -> dict[str, object]:
+        path = _resolve_or_400(sess, name)
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"session not found: {name}")
+        samples = load_recent_samples_from_path(str(path), max_rows=100000, only_plausible=True)
+        return analyze_samples(samples).to_dict()
 
     @app.post("/api/upload")
     async def upload(file: UploadFile) -> dict[str, object]:
