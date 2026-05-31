@@ -515,6 +515,7 @@ async def stream_notifications(
     reconnect: bool = True,
     max_reconnect_attempts: int = 5,
     on_disconnect: Callable[[], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
     monotonic_fn: Callable[[], float] = time.monotonic,
     sleep_fn: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> StreamResult:
@@ -593,6 +594,7 @@ async def stream_notifications(
             max_notifications=max_notifications,
             get_count=get_count,
             is_connected=lambda: bool(client_any.is_connected),
+            should_stop=should_stop,
             monotonic_fn=monotonic_fn,
             sleep_fn=sleep_fn,
         )
@@ -611,6 +613,7 @@ async def stream_notifications(
         run_session=run_session,
         close_session=close_session,
         on_disconnect=on_disconnect,
+        should_stop=should_stop,
         monotonic_fn=monotonic_fn,
         sleep_fn=sleep_fn,
     )

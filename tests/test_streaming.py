@@ -81,6 +81,81 @@ def test_run_until_deadline_detects_disconnect() -> None:
     assert reason == "disconnected"
 
 
+def test_run_until_deadline_stops_on_should_stop() -> None:
+    clock = FakeAsyncClock()
+    reason = asyncio.run(
+        run_until_deadline(
+            deadline=100.0,
+            poll_interval=0.2,
+            max_notifications=0,
+            get_count=lambda: 0,
+            is_connected=lambda: True,
+            should_stop=lambda: True,
+            monotonic_fn=clock.monotonic,
+            sleep_fn=clock.sleep,
+        )
+    )
+    assert reason == "stopped"
+
+
+def test_supervise_returns_stopped_as_terminal() -> None:
+    clock = FakeAsyncClock()
+
+    async def open_session() -> OpenedSession:
+        return OpenedSession(subscribed=("u",), failed=(), handle="c1")
+
+    async def run_session(session: OpenedSession, deadline: float) -> str:
+        return "stopped"
+
+    async def close_session(session: OpenedSession) -> None:
+        return None
+
+    result = asyncio.run(
+        supervise_stream(
+            run_seconds=100.0,
+            reconnect=True,
+            max_reconnect_attempts=3,
+            open_session=open_session,
+            run_session=run_session,
+            close_session=close_session,
+            on_disconnect=None,
+            monotonic_fn=clock.monotonic,
+            sleep_fn=clock.sleep,
+        )
+    )
+    assert result.ended_reason == "stopped"
+    assert result.reconnects == 0
+
+
+def test_supervise_should_stop_aborts_reconnect() -> None:
+    clock = FakeAsyncClock()
+
+    async def open_session() -> OpenedSession:
+        return OpenedSession(subscribed=("u",), failed=(), handle="c1")
+
+    async def run_session(session: OpenedSession, deadline: float) -> str:
+        return "disconnected"
+
+    async def close_session(session: OpenedSession) -> None:
+        return None
+
+    result = asyncio.run(
+        supervise_stream(
+            run_seconds=100.0,
+            reconnect=True,
+            max_reconnect_attempts=3,
+            open_session=open_session,
+            run_session=run_session,
+            close_session=close_session,
+            on_disconnect=None,
+            should_stop=lambda: True,
+            monotonic_fn=clock.monotonic,
+            sleep_fn=clock.sleep,
+        )
+    )
+    assert result.ended_reason == "stopped"
+
+
 def test_supervise_reconnects_once_then_finishes_at_deadline() -> None:
     clock = FakeAsyncClock()
     events: list[str] = []
