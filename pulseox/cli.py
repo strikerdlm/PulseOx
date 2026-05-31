@@ -235,7 +235,16 @@ async def _run(args: argparse.Namespace) -> None:
             poll_interval=args.poll_interval,
             timeout_s=args.timeout,
             connect_attempts=args.connect_attempts,
+            reconnect=args.reconnect,
+            max_reconnect_attempts=args.max_reconnect_attempts,
+            on_disconnect=(recorder.flush if recorder is not None else None),
             on_payload=on_payload,
+        )
+        rows = recorder.rows_written if recorder is not None else 0
+        print(
+            f"\nSession ended ({result.ended_reason}): "
+            f"rows={rows} reconnects={result.reconnects} "
+            f"gap={result.total_gap_s:.1f}s"
         )
         if result.failed:
             print("\nSome subscriptions failed:")
@@ -311,14 +320,29 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-notifications",
         type=int,
-        default=1000,
-        help="Maximum notifications to process (bounded)",
+        default=0,
+        help=(
+            "Safety ceiling on raw notifications processed; 0 = disabled (default). "
+            "Duration is the authoritative bound."
+        ),
     )
     parser.add_argument(
         "--poll-interval",
         type=float,
         default=0.2,
         help="Polling interval for bounded loop, seconds",
+    )
+    parser.add_argument(
+        "--reconnect",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reconnect and resume recording if the BLE link drops (default: on)",
+    )
+    parser.add_argument(
+        "--max-reconnect-attempts",
+        type=int,
+        default=5,
+        help="Bounded consecutive reconnect attempts before giving up",
     )
 
     parser.add_argument(
@@ -384,7 +408,8 @@ def main() -> None:
             "- Move closer; weak signal can advertise but fail to connect.\n"
             "- Try increasing timeouts/retries:\n"
             "  python -m pulseox.cli --address <ADDR> --timeout 20 --connect-attempts 5 ...\n"
-            "- On Linux, ensure Bluetooth is unblocked and you have permissions (often group `bluetooth`).\n"
+            "- On Linux, ensure Bluetooth is unblocked and you have permissions "
+            "(often group `bluetooth`).\n"
             "- If it still fails, run `--scan --sort-rssi` to confirm the address is stable.\n"
         )
         raise SystemExit(2) from None
