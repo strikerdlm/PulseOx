@@ -181,10 +181,21 @@ python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --notify-uuid 49535343-1e4d-
 
 ### 5) Tuning runtime bounds/timeouts
 
-- `--duration`: how long to listen (seconds)
-- `--max-notifications`: stop after N notifications
+- `--duration`: how long to record (seconds). **Authoritative bound** — the run
+  lasts the full duration regardless of notification rate.
+- `--max-notifications`: opt-in safety ceiling on *raw* notifications; **`0`
+  (default) disables it**. (Previously defaulted to `1000`, which could end a
+  timed run early because high-rate waveform packets are counted before they are
+  filtered out.)
+- `--reconnect` / `--no-reconnect`: on a dropped BLE link, re-scan, reconnect,
+  resubscribe, and resume appending to the same CSV until the duration elapses
+  (default: on).
+- `--max-reconnect-attempts`: bounded consecutive reconnect attempts (default 5).
 - `--timeout`: per-operation BLE timeout (seconds)
 - `--poll-interval`: internal bounded loop sleep (seconds)
+
+At the end of a run the CLI prints a summary line:
+`Session ended (deadline): rows=<n> reconnects=<n> gap=<seconds>s`.
 
 ### 6) CSV data collection
 
