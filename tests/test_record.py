@@ -162,3 +162,59 @@ def test_csv_skips_a340b_lk_non_measurement_packets() -> None:
     fp.seek(0)
     rows = list(csv.DictReader(fp))
     assert rows == []
+
+
+class _FlushSpy(io.StringIO):
+    def __init__(self) -> None:
+        super().__init__()
+        self.flush_count = 0
+
+    def flush(self) -> None:
+        self.flush_count += 1
+        super().flush()
+
+
+def test_recorder_time_based_flush() -> None:
+    fp = _FlushSpy()
+    # start=0.0, call1 now=0.0, call2 now=3.0 (>= 2.0s interval)
+    clock = FakeClock([0.0, 0.0, 3.0])
+    now_dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+
+    recorder = PulseOxCsvRecorder(
+        fp,
+        write_header=True,
+        sample_hz=0.0,
+        include_implausible=False,
+        flush_every=1000,
+        flush_interval_s=2.0,
+        monotonic_fn=clock.monotonic,
+        now_utc_fn=lambda: now_dt,
+    )
+
+    frame = bytes([0xF1, 0x5C, 0x46])
+    recorder.on_notification(sender=1, data=frame)  # now=0.0 -> no time flush
+    after_first = fp.flush_count
+    recorder.on_notification(sender=1, data=frame)  # now=3.0 -> time-based flush
+    assert fp.flush_count > after_first
+
+
+def test_recorder_flush_is_public_and_writes() -> None:
+    fp = _FlushSpy()
+    clock = FakeClock([0.0, 0.0])
+    now_dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+
+    recorder = PulseOxCsvRecorder(
+        fp,
+        write_header=False,
+        sample_hz=0.0,
+        include_implausible=False,
+        flush_every=1000,
+        flush_interval_s=1000.0,
+        monotonic_fn=clock.monotonic,
+        now_utc_fn=lambda: now_dt,
+    )
+    recorder.on_notification(sender=1, data=bytes([0xF1, 0x5C, 0x46]))
+    before = fp.flush_count
+    recorder.flush()
+    recorder.flush()
+    assert fp.flush_count == before + 2

@@ -160,6 +160,7 @@ class PulseOxCsvRecorder:
         sample_hz: float,
         include_implausible: bool,
         flush_every: int,
+        flush_interval_s: float = 2.0,
         monotonic_fn: Callable[[], float] = time.monotonic,
         now_utc_fn: Callable[[], datetime] = _now_utc,
     ) -> None:
@@ -170,10 +171,14 @@ class PulseOxCsvRecorder:
         self._sample_hz = _require_nonnegative_finite(sample_hz, "sample_hz")
         self._include_implausible = bool(include_implausible)
         self._flush_every = _require_positive_int(flush_every, "flush_every")
+        self._flush_interval_s = _require_nonnegative_finite(
+            flush_interval_s, "flush_interval_s"
+        )
 
         self._min_interval_s = 0.0 if self._sample_hz == 0.0 else (1.0 / self._sample_hz)
         self._start_mono = self._monotonic()
         self._last_write_mono: float | None = None
+        self._last_flush_mono = self._start_mono
         self._rows_since_flush = 0
         self._rows_written = 0
 
@@ -188,6 +193,10 @@ class PulseOxCsvRecorder:
 
     def close(self) -> None:
         """Flush buffered rows (does not close the underlying file)."""
+        self.flush()
+
+    def flush(self) -> None:
+        """Flush buffered rows to the underlying file."""
         self._file.flush()
         self._rows_since_flush = 0
 
@@ -250,6 +259,10 @@ class PulseOxCsvRecorder:
         self._rows_since_flush += 1
         self._last_write_mono = now_mono
 
-        if self._rows_since_flush >= self._flush_every:
-            self._file.flush()
-            self._rows_since_flush = 0
+        time_due = (
+            self._flush_interval_s > 0
+            and (now_mono - self._last_flush_mono) >= self._flush_interval_s
+        )
+        if self._rows_since_flush >= self._flush_every or time_due:
+            self.flush()
+            self._last_flush_mono = now_mono
