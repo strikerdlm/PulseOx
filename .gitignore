@@ -6,9 +6,8 @@ __pycache__/
 .venv/
 venv/
 .env
-.reflex/
-.web/
 .vscode/
 .idea/
 session.csv
+sessions/
 build.log

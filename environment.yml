@@ -6,10 +6,10 @@ dependencies:
   - pip=24.0
   - pip:
       - bleak==0.22.2
-      - plotly==6.5.2
+      - fastapi==0.136.3
+      - uvicorn[standard]==0.48.0
+      - python-multipart==0.0.29
       - pytest==8.2.0
       - ruff==0.6.9
       - pyright==1.1.390
-      - streamlit==1.53.1
-      - streamlit-autorefresh==1.0.1
-      - reflex==0.8.26
+      - httpx==0.28.1

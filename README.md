@@ -51,28 +51,31 @@ conda env create -f environment.yml
 conda activate pulseox
 ```
 
-## Dashboard (Streamlit)
+## Backend service (FastAPI + WebSocket)
 
-This repo includes a Streamlit dashboard that visualizes the most recent rows from a PulseOx CSV recording (large SpO2 gauge + HR gauge + trends).
-
-### 1) Record to CSV (terminal 1)
+The `pulseox_server/` package is a local control plane that lets the TypeScript
+UI scan, connect to, and record from the device, and stream live samples over a
+WebSocket. It must run on the machine with the Bluetooth adapter (the browser
+cannot speak BLE directly).
 
 ```bash
-python -m pulseox.cli --address "FF:FF:FF:FF:00:21" --csv session.csv --csv-overwrite --duration 600 --quiet
+python -m pulseox_server          # serves http://127.0.0.1:8000
 ```
 
-### 2) Run the dashboard (terminal 2)
+Endpoints (all under `/api`): `GET /health`, `GET /status`, `POST /scan`,
+`POST /recording/start`, `POST /recording/stop`, `GET /sessions`,
+`GET /sessions/{name}`, `POST /upload`, and `WS /ws/stream` for live
+`{"type":"sample"|"status", ...}` frames. Recordings are written to `sessions/`
+(override with `PULSEOX_SESSIONS_DIR`). Sample/`sessions` payloads match the
+`PulseOxSample` shape the frontend expects.
+
+Example: start a 5-minute recording from Diego's device, then stop it:
 
 ```bash
-streamlit run streamlit_app.py
-```
-
-Open the URL printed by Streamlit. In the sidebar, set **CSV path** to `session.csv` (or any CSV produced by `--csv`).
-
-Tip: to see debug logs/tracebacks in the terminal, set `PULSEOX_LOG_LEVEL=DEBUG`:
-
-```bash
-PULSEOX_LOG_LEVEL=DEBUG streamlit run streamlit_app.py
+curl -X POST http://127.0.0.1:8000/api/recording/start \
+  -H 'content-type: application/json' \
+  -d '{"address":"FF:FF:FF:FF:00:21","duration_s":300}'
+curl -X POST http://127.0.0.1:8000/api/recording/stop
 ```
 
 ## Dashboard (TypeScript/Next.js)

@@ -1,5 +1,4 @@
 bleak==0.22.2
-plotly==6.5.2
-reflex==0.8.26
-streamlit==1.53.1
-streamlit-autorefresh==1.0.1
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+python-multipart==0.0.29

@@ -6,7 +6,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "N", "S", "W", "C90"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pulseox"]
+known-first-party = ["pulseox", "pulseox_server"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
@@ -20,7 +20,6 @@ reportUnknownArgumentType = "error"
 reportUnknownLambdaType = "error"
 reportUnknownVariableType = "error"
 pythonVersion = "3.11"
-exclude = ["streamlit_app.py"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
