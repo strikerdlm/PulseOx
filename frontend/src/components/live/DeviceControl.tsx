@@ -109,11 +109,11 @@ export function DeviceControl({ status }: DeviceControlProps): JSX.Element {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label={`Duration · ${minutes} min`}>
+        <Field label={`Duration · ${fmtMinutes(minutes)}`}>
           <input
             type="range"
             min={1}
-            max={120}
+            max={480}
             value={minutes}
             disabled={recording}
             onChange={(e) => setMinutes(parseInt(e.target.value, 10))}
@@ -175,6 +175,13 @@ export function DeviceControl({ status }: DeviceControlProps): JSX.Element {
       <StatusReadout status={status} />
     </div>
   );
+}
+
+function fmtMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
